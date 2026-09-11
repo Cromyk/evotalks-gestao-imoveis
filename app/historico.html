@@ -66,10 +66,12 @@
   <button class="btn btn-slim btn-perigo" id="b-zerar" type="button" style="margin-left:auto">Apagar histórico</button>
 </div>
 
+<p class="gi-nota" id="gi-modo" style="margin-bottom:10px"></p>
+
 <p class="gi-nota">
   Os seletores só oferecem valores que <strong>existem</strong> no histórico — filtro que devolve
-  zero por construção não ajuda ninguém. O histórico guarda os <strong>500 eventos mais recentes</strong>;
-  o mais antigo sai quando o 501 entra.
+  zero por construção não ajuda ninguém. No modo portal o histórico é gravado por <strong>trigger no banco</strong> e guarda tudo;
+  no modo local ficam os <strong>500 mais recentes</strong>, e o mais antigo sai quando o 501 entra.
 </p>
 
 <script src="comum.js"></script>
@@ -172,6 +174,7 @@
       }).catch(function () {});
     });
 
+    if (GI.modo === 'portal') { el('b-zerar').style.display = 'none'; }
     return GI.historico().then(function (lista) {
       eventos = lista;
       preencherSeletores();

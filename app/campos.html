@@ -51,6 +51,8 @@
   </table>
 </div>
 
+<p class="gi-nota" id="gi-modo" style="margin-bottom:10px"></p>
+
 <p class="gi-nota">
   <strong>Desativar esconde; apagar leva junto o que foi preenchido em todos os imóveis.</strong>
   Por isso o botão de apagar só aparece em campo que ninguém usou ainda — é a mesma regra do portal.
@@ -68,6 +70,10 @@
   var el = function (id) { return document.getElementById(id); };
 
   function usos(idCampo) {
+    if (GI.modo === 'portal') {
+      var c = campos.filter(function (x) { return x.id === idCampo; })[0];
+      return c ? (c.emUso || 0) : 0;
+    }
     var n = 0;
     Object.keys(valores).forEach(function (codigo) {
       if (valores[codigo] && valores[codigo][idCampo]) n++;
@@ -133,6 +139,19 @@
     return GI.salvarCampos(campos).then(desenhar).catch(GI.erroFatal);
   }
 
+  /* No modo portal cada campo é uma linha no banco: criar, alterar e apagar
+     são chamadas próprias, e a resposta já traz a lista inteira de volta —
+     é ela que vira o estado da tela, não o array local. */
+  function aplicar(promessa) {
+    return promessa.then(function (lista) {
+      campos = lista;
+      desenhar();
+    }).catch(function (e) {
+      GI.aviso(e && e.message ? e.message : String(e), 'error');
+      GI.erroFatal(e);
+    });
+  }
+
   function criar() {
     var nome = el('n-nome').value.trim();
     var tipo = el('n-tipo').value;
@@ -151,8 +170,16 @@
     }
     if (tipo === 'valor') campo.recorrenciaPadrao = el('n-recorrencia').value;
 
-    campos.push(campo);
     el('n-nome').value = ''; el('n-opcoes').value = '';
+
+    if (GI.modo === 'portal') {
+      aplicar(GI.campoCriar(campo).then(function (lista) {
+        GI.aviso('Campo "' + nome + '" criado.', 'success');
+        return lista;
+      }));
+      return;
+    }
+    campos.push(campo);
     persistir().then(function () { GI.aviso('Campo "' + nome + '" criado.', 'success'); });
   }
 
@@ -167,6 +194,7 @@
       var novo = r && r.data ? String(r.data.nome || '').trim() : '';
       if (!novo || novo === atual) return;
       campo.nome = novo;
+      if (GI.modo === 'portal') return aplicar(GI.campoAtualizar(campo));
       return persistir();
     }).catch(function () {
       /* formulário dinâmico indisponível: caminho simples, sem prompt bloqueante */
@@ -178,6 +206,7 @@
     var campo = campos.filter(function (c) { return c.id === id; })[0];
     if (!campo) return;
     campo.ativo = (campo.ativo === false);
+    if (GI.modo === 'portal') { aplicar(GI.campoAtualizar(campo)); return; }
     persistir();
   }
 
@@ -191,9 +220,11 @@
       message: 'Apagar "' + campo.nome + '"? Ele não está em uso em nenhum imóvel.'
     })).then(function (ok) {
       if (ok === false) return;
+      if (GI.modo === 'portal') return aplicar(GI.campoApagar(id));
       campos = campos.filter(function (c) { return c.id !== id; });
       return persistir();
     }).catch(function () {
+      if (GI.modo === 'portal') return aplicar(GI.campoApagar(id));
       campos = campos.filter(function (c) { return c.id !== id; });
       persistir();
     });

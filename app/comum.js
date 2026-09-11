@@ -31,6 +31,8 @@
       ctx = c || null;
       aplicarTema(ctx);
       Promise.resolve()
+        .then(function () { return GI.definirModo(); })
+        .then(function () { GI.mostrarModo(); })
         .then(function () { return fn(ctx); })
         .catch(function (e) { GI.erroFatal(e); })
         .then(function () { GI.ajustarAltura(); });
@@ -76,12 +78,64 @@
   };
 
   /* --------------------------------------------------------------- guardados
-     PILOTO: o estado vive em omni.storage — por instalação E por usuário, no
-     navegador dele (~262.144 caracteres). Outro PC começa vazio. É onde trocar
-     por backend/armazenamento permanente quando a extensão sair do piloto:
-     só estas funções falam com a persistência. */
+
+     DOIS MODOS, e é aqui — e só aqui — que a diferença mora:
+
+     • PORTAL  (config `portalUrl` + `portalToken` preenchidas): o dado vive no
+       Postgres do portal, que é o MESMO banco que o MCP lê. Tela e IA passam a
+       ver uma verdade só. É o modo de operação.
+     • LOCAL   (config vazia): omni.storage, por usuário e por navegador. Serve
+       para experimentar as telas sem servidor; o que se grava aqui NÃO chega à
+       IA nem a mais ninguém.
+
+     A tela diz em qual modo está, no rodapé — não se descobre isso por
+     acidente. */
 
   var CHAVES = { campos: 'gi.campos', valores: 'gi.valores', historico: 'gi.historico' };
+
+  GI.modo = 'local';
+  GI.portalErro = '';
+
+  function baseDoPortal() {
+    var u = String(GI.cfg('portalUrl', '')).trim().replace(/\/+$/, '');
+    return u ? u + '/api/ext' : '';
+  }
+  function tokenDoPortal() { return String(GI.cfg('portalToken', '')).trim(); }
+
+  GI.usaPortal = function () { return !!(baseDoPortal() && tokenDoPortal()); };
+
+  /* fetch direto, não omni.http.request: a CSP do contêiner libera o origin de
+     onde o HTML veio, e o portal responde `Access-Control-Allow-Origin: *`.
+     Escapa da cota de 30 req/min por usuário do omni.http. */
+  function chamar(caminho, opcoes) {
+    opcoes = opcoes || {};
+    var url = baseDoPortal() + caminho;
+    var cab = {
+      'Authorization': 'Bearer ' + tokenDoPortal(),
+      'X-GI-Autor': GI.usuario()
+    };
+    if (opcoes.corpo !== undefined) cab['Content-Type'] = 'application/json';
+
+    return fetch(url, {
+      method: opcoes.corpo !== undefined ? 'POST' : 'GET',
+      headers: cab,
+      body: opcoes.corpo !== undefined ? JSON.stringify(opcoes.corpo) : undefined
+    }).then(function (r) {
+      return r.text().then(function (txt) {
+        var dados = null;
+        try { dados = txt ? JSON.parse(txt) : null; } catch (e) { /* resposta não-JSON */ }
+        if (!r.ok) {
+          var msg = (dados && dados.erro) ? dados.erro : ('HTTP ' + r.status);
+          if (r.status === 401) msg = 'token do portal recusado';
+          var err = new Error(msg);
+          err.status = r.status;
+          throw err;
+        }
+        return dados;
+      });
+    });
+  }
+  GI.chamarPortal = chamar;
 
   function ler(chave, padrao) {
     if (!global.omni || !omni.storage) return Promise.resolve(padrao);
@@ -98,15 +152,75 @@
     });
   }
 
-  GI.campos = function () { return ler(CHAVES.campos, []); };
-  GI.salvarCampos = function (lista) { return gravar(CHAVES.campos, lista); };
-  GI.valores = function () { return ler(CHAVES.valores, {}); };
-  GI.salvarValores = function (mapa) { return gravar(CHAVES.valores, mapa); };
-  GI.historico = function () { return ler(CHAVES.historico, []); };
+  /* Confere o portal uma vez, na montagem. Se ele não responder, a tela NÃO
+     cai em silêncio para o storage local: ela avisa, porque trabalhar numa
+     cópia que ninguém lê é pior do que não trabalhar. */
+  GI.definirModo = function () {
+    if (!GI.usaPortal()) { GI.modo = 'local'; return Promise.resolve('local'); }
+    return chamar('/info').then(function () {
+      GI.modo = 'portal';
+      GI.portalErro = '';
+      return 'portal';
+    }).catch(function (e) {
+      GI.modo = 'portal-fora';
+      GI.portalErro = e && e.message ? e.message : String(e);
+      return 'portal-fora';
+    });
+  };
+
+  function exigePortal() {
+    return Promise.reject(new Error(
+      'O portal não respondeu (' + (GI.portalErro || 'sem detalhe') + '). ' +
+      'Nada foi gravado — corrija a conexão antes de continuar.'));
+  }
+
+  GI.campos = function () {
+    if (GI.modo === 'portal') return chamar('/campos?todos=1').then(function (r) { return paraCamposTela(r.campos); });
+    if (GI.modo === 'portal-fora') return exigePortal();
+    return ler(CHAVES.campos, []);
+  };
+
+  GI.salvarCampos = function (lista) {
+    if (GI.modo !== 'portal') {
+      if (GI.modo === 'portal-fora') return exigePortal();
+      return gravar(CHAVES.campos, lista);
+    }
+    // No portal cada campo é uma linha: a tela usa GI.campoCriar/Atualizar/Apagar.
+    return Promise.resolve();
+  };
+
+  GI.valores = function () {
+    if (GI.modo === 'portal') return Promise.resolve({});   // o portal é consultado por imóvel
+    if (GI.modo === 'portal-fora') return exigePortal();
+    return ler(CHAVES.valores, {});
+  };
+  GI.salvarValores = function (mapa) {
+    if (GI.modo === 'portal') return Promise.resolve();
+    if (GI.modo === 'portal-fora') return exigePortal();
+    return gravar(CHAVES.valores, mapa);
+  };
+
+  GI.historico = function (filtros) {
+    if (GI.modo === 'portal') {
+      var qs = [];
+      filtros = filtros || {};
+      if (filtros.codigo) qs.push('codigo=' + encodeURIComponent(filtros.codigo));
+      if (filtros.quem) qs.push('quem=' + encodeURIComponent(filtros.quem));
+      if (filtros.campo) qs.push('campo=' + encodeURIComponent(filtros.campo));
+      return chamar('/historico' + (qs.length ? '?' + qs.join('&') : ''))
+        .then(function (r) { return (r.eventos || []).map(paraEventoTela); });
+    }
+    if (GI.modo === 'portal-fora') return exigePortal();
+    return ler(CHAVES.historico, []);
+  };
 
   GI.registrarHistorico = function (eventos) {
+    // No portal o histórico nasce de trigger no banco, com a autoria que veio
+    // no cabeçalho: gravar daqui duplicaria cada linha.
+    if (GI.modo === 'portal') return Promise.resolve();
+    if (GI.modo === 'portal-fora') return exigePortal();
     if (!eventos || !eventos.length) return Promise.resolve();
-    return GI.historico().then(function (lista) {
+    return ler(CHAVES.historico, []).then(function (lista) {
       var agora = new Date().toISOString();
       eventos.forEach(function (ev) {
         ev.quando = agora;
@@ -115,6 +229,125 @@
       });
       return gravar(CHAVES.historico, lista.slice(0, 500));   // teto: o storage é finito
     });
+  };
+
+  /* --- tradução entre o formato do portal e o das telas -------------------
+     O banco fala `rotulo`/`recorrencia_padrao`/`valor_centavos`; as telas
+     falam `nome`/`recorrenciaPadrao`/`valor`. Traduzir num lugar só evita
+     espalhar `campo.rotulo || campo.nome` por três arquivos. */
+
+  var TIPO_DO_PORTAL = { valor: 'valor', numero: 'numero', texto: 'texto', selecao: 'selecao', checkbox: 'simnao' };
+  var TIPO_PARA_PORTAL = { valor: 'valor', numero: 'numero', texto: 'texto', selecao: 'selecao', simnao: 'checkbox' };
+
+  function paraCamposTela(lista) {
+    return (lista || []).map(function (c) {
+      return {
+        id: c.id,
+        nome: c.rotulo,
+        tipo: TIPO_DO_PORTAL[c.tipo] || c.tipo,
+        opcoes: c.opcoes || [],
+        recorrenciaPadrao: c.recorrencia_padrao,
+        ordem: c.ordem,
+        ativo: c.ativo !== false,
+        emUso: c.em_uso || 0
+      };
+    });
+  }
+  GI.tipoParaPortal = function (t) { return TIPO_PARA_PORTAL[t] || t; };
+
+  /* O banco fala INSERT/UPDATE/DELETE e `valor_anterior`; a tela fala
+     preencheu/alterou/removeu e `de`. */
+  var ACAO = { INSERT: 'preencheu', UPDATE: 'alterou', DELETE: 'removeu' };
+
+  function paraEventoTela(e) {
+    return {
+      quando: e.quando,
+      quem: e.quem,
+      codigo: e.codigo,
+      campo: e.rotulo,
+      acao: ACAO[e.operacao] || String(e.operacao || '').toLowerCase(),
+      de: e.valor_anterior == null ? '' : String(e.valor_anterior),
+      para: e.valor_novo == null ? '' : String(e.valor_novo)
+    };
+  }
+
+  /* --- campos, no modo portal (uma linha por campo) ---------------------- */
+
+  GI.campoCriar = function (campo) {
+    return chamar('/campos', { corpo: {
+      rotulo: campo.nome,
+      tipo: GI.tipoParaPortal(campo.tipo),
+      opcoes: campo.opcoes || [],
+      recorrenciaPadrao: campo.recorrenciaPadrao || 'mes'
+    } }).then(function (r) { return paraCamposTela(r.campos); });
+  };
+
+  GI.campoAtualizar = function (campo) {
+    return chamar('/campos/' + campo.id, { corpo: {
+      rotulo: campo.nome,
+      tipo: GI.tipoParaPortal(campo.tipo),
+      opcoes: campo.opcoes || [],
+      recorrenciaPadrao: campo.recorrenciaPadrao || 'mes',
+      ordem: campo.ordem || 100,
+      ativo: campo.ativo !== false
+    } }).then(function (r) { return paraCamposTela(r.campos); });
+  };
+
+  GI.campoApagar = function (id) {
+    return chamar('/campos/' + id + '/apagar', { corpo: {} })
+      .then(function (r) { return paraCamposTela(r.campos); });
+  };
+
+  /* --- lançamentos de um imóvel, no modo portal ------------------------- */
+
+  GI.valoresDoImovel = function (codigo) {
+    if (GI.modo !== 'portal') return GI.valores().then(function (m) { return m[codigo] || {}; });
+    return chamar('/valores/' + encodeURIComponent(codigo)).then(function (r) {
+      var saida = {};
+      (r.valores || []).forEach(function (v) {
+        if (v.valor_centavos == null && v.valor_num == null &&
+            (v.valor_texto == null || v.valor_texto === '') && !v.observacao) return;
+        saida[v.campo_id] = {
+          valor: v.valor_centavos != null ? (Number(v.valor_centavos) / 100)
+               : v.valor_num != null ? Number(v.valor_num)
+               : (v.valor_texto || ''),
+          obs: v.observacao || '',
+          recorrencia: v.recorrencia || undefined
+        };
+      });
+      return saida;
+    });
+  };
+
+  GI.salvarValoresDoImovel = function (codigo, lancados, campos) {
+    if (GI.modo !== 'portal') {
+      return GI.valores().then(function (mapa) {
+        if (Object.keys(lancados).length) mapa[codigo] = lancados;
+        else delete mapa[codigo];
+        return GI.salvarValores(mapa);
+      });
+    }
+    /* Manda TODOS os campos ativos, inclusive os vazios: campo vazio é como o
+       portal apaga um lançamento. Omitir os vazios deixaria valor velho vivo. */
+    var entradas = (campos || []).filter(function (c) { return c.ativo !== false; }).map(function (c) {
+      var l = lancados[c.id];
+      var e = { campo_id: c.id, valor_centavos: null, valor_num: null,
+                valor_texto: null, recorrencia: null, observacao: null };
+      if (!l) return e;
+      e.observacao = l.obs || null;
+      if (c.tipo === 'valor') {
+        if (l.valor !== '' && l.valor !== null && l.valor !== undefined) {
+          e.valor_centavos = Math.round(Number(l.valor) * 100);
+        }
+        e.recorrencia = l.recorrencia || c.recorrenciaPadrao || 'unico';
+      } else if (c.tipo === 'numero') {
+        if (l.valor !== '' && l.valor !== null && l.valor !== undefined) e.valor_num = Number(l.valor);
+      } else {
+        if (l.valor !== '' && l.valor !== null && l.valor !== undefined) e.valor_texto = String(l.valor);
+      }
+      return e;
+    });
+    return chamar('/valores/' + encodeURIComponent(codigo), { corpo: { entradas: entradas } });
   };
 
   /* A tela Consultas saiu na 0.3.0. O registro de buscas deixou de ter leitor, então deixou
@@ -328,6 +561,25 @@
       var r = omni.ui.openContribution(contributionId);
       if (r && r.catch) r.catch(function () { GI.aviso('Abra pelo menu Gerenciamento de Imóveis.', 'info'); });
     } catch (e) { GI.aviso('Abra pelo menu Gerenciamento de Imóveis.', 'info'); }
+  };
+
+  /* A tela precisa dizer onde está gravando. Uma pessoa preenchendo 40 imóveis
+     num storage que ninguém lê perde o trabalho inteiro em silêncio. */
+  GI.mostrarModo = function () {
+    var alvo = document.getElementById('gi-modo');
+    if (!alvo) return;
+    if (GI.modo === 'portal') {
+      alvo.innerHTML = '🟢 <strong>Conectado ao portal</strong> — o que você grava aqui é o que a ' +
+        'assistente de IA responde ao cliente.';
+    } else if (GI.modo === 'portal-fora') {
+      alvo.innerHTML = '🔴 <strong>O portal não respondeu</strong> (' + GI.escapar(GI.portalErro) + '). ' +
+        'Nada será gravado até a conexão voltar — avise o suporte antes de continuar.';
+    } else {
+      alvo.innerHTML = '🟡 <strong>Modo local</strong> — sem portal configurado, o que você preencher fica ' +
+        'só no seu navegador e <strong>não chega à IA</strong>. Para valer, preencha a URL e o token do ' +
+        'portal na instalação da extensão.';
+    }
+    GI.ajustarAltura();
   };
 
   GI.cabecalho = function (ativo) {

@@ -83,9 +83,7 @@
 </section>
 
 <p class="gi-nota">
-  Piloto: o que você preenche fica no <strong>armazenamento do seu usuário neste navegador</strong>
-  (limite ~262 mil caracteres). Outro computador começa vazio. A troca por armazenamento
-  compartilhado acontece numa camada só do código, sem mexer nestas telas.
+  <span id="gi-modo">verificando onde os dados são gravados…</span>
 </p>
 
 <script src="comum.js"></script>
@@ -187,11 +185,14 @@
           ' · código interno ' + GI.escapar(p.internalcode) +
         '</div>';
 
-      desenharFormulario(p.internalcode);
-      el('gi-lista').style.display = 'none';
-      el('gi-detalhe').style.display = 'block';
-      el('gi-salvo').textContent = '';
-      GI.ajustarAltura();
+      return GI.valoresDoImovel(p.internalcode).then(function (lancados) {
+        estado.valores[p.internalcode] = lancados;
+        desenharFormulario(p.internalcode);
+        el('gi-lista').style.display = 'none';
+        el('gi-detalhe').style.display = 'block';
+        el('gi-salvo').textContent = '';
+        GI.ajustarAltura();
+      });
     }).catch(GI.erroFatal);
   }
 
@@ -329,7 +330,7 @@
     if (Object.keys(novo).length) estado.valores[codigo] = novo;
     else delete estado.valores[codigo];
 
-    GI.salvarValores(estado.valores)
+    GI.salvarValoresDoImovel(codigo, novo, estado.campos)
       .then(function () { return GI.registrarHistorico(eventos); })
       .then(function () {
         el('gi-salvo').textContent = eventos.length + ' alteração' + (eventos.length > 1 ? 'ões' : '') + ' gravada' + (eventos.length > 1 ? 's' : '');

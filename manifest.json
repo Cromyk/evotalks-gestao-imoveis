@@ -1,13 +1,25 @@
 {
   "manifestVersion": 1,
   "id": "evotalks.gestao-imoveis",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "name": "Gerenciamento de Imóveis",
   "description": "Campos internos por imóvel (taxas, encargos, observações) que não aparecem no site, com histórico de autoria. Porte do portal de taxas do William Imóveis para dentro do EvoTalks.",
   "author": {
     "name": "Evotalks / Cromyk"
   },
   "config": [
+    {
+      "key": "portalUrl",
+      "label": "URL do portal (backend)",
+      "type": "url",
+      "help": "Ex.: https://gestao-imoveis.evotalks.io — vazio faz as telas gravarem só no navegador de quem usa, sem chegar à IA."
+    },
+    {
+      "key": "portalToken",
+      "label": "Token do portal",
+      "type": "secret",
+      "help": "O mesmo MCP_TOKEN do portal. Sem ele as telas não conseguem ler nem gravar no banco que a IA consulta."
+    },
     {
       "key": "marca",
       "label": "Marca do catálogo (brand)",
@@ -35,7 +47,7 @@
       "id": "gestao-imoveis",
       "type": "topMenu",
       "title": "Gerenciamento de Imóveis",
-      "icon": "icon-far-building",
+      "icon": "app/icone-casa.svg",
       "visibility": {
         "userTypes": [
           0,
@@ -75,5 +87,6 @@
         }
       ]
     }
-  ]
+  ],
+  "icon": "app/icone-casa.svg"
 }

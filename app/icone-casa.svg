@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Gerenciamento de Imóveis">
+  <!-- Casa de traço, na mesma linguagem dos ícones da barra do EvoTalks:
+       contorno de ~1.8px, sem preenchimento, ocupando quase todo o viewBox
+       (a bolinha vazia anterior era o FontAwesome "icon-far-building" não
+       resolvendo nesta instância).
+
+       Cor: o host carrega isto como imagem, então `currentColor` não herda —
+       a cor vem das regras abaixo. A barra é escura no tema padrão e clara no
+       tema claro, e cada caso tem a sua. -->
+  <style>
+    .traco {
+      fill: none;
+      stroke: #e9edf2;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    @media (prefers-color-scheme: light) {
+      .traco { stroke: #2b3440; }
+    }
+  </style>
+
+  <!-- telhado -->
+  <path class="traco" d="M3 10.2 12 3.2l9 7" />
+  <!-- corpo -->
+  <path class="traco" d="M5.2 9.1V20.3h13.6V9.1" />
+  <!-- porta -->
+  <path class="traco" d="M9.9 20.3v-5.1h4.2v5.1" />
+  <!-- janela -->
+  <path class="traco" d="M9.9 11.1h4.2" />
+</svg>
