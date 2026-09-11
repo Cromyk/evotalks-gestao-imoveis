@@ -1,0 +1,182 @@
+<meta charset="utf-8">
+<link rel="stylesheet" href="estilo.css">
+
+<div class="gi-topo">
+  <div>
+    <h1>Histórico</h1>
+    <p class="gi-sub" id="gi-resumo">quem mudou o quê, quando, e de onde para onde</p>
+  </div>
+  <div id="gi-nav"></div>
+</div>
+
+<div class="gi-erro" id="gi-erro"></div>
+
+<div class="gi-barra">
+  <div class="gi-campo" style="flex:1 1 180px">
+    <label for="f-imovel">Imóvel (código)</label>
+    <input id="f-imovel" type="search" placeholder="todos">
+  </div>
+  <div class="gi-campo">
+    <label for="f-campo">Campo</label>
+    <select id="f-campo"><option value="">todos</option></select>
+  </div>
+  <div class="gi-campo">
+    <label for="f-quem">Quem</label>
+    <select id="f-quem"><option value="">todos</option></select>
+  </div>
+  <div class="gi-campo">
+    <label for="f-acao">O que aconteceu</label>
+    <select id="f-acao">
+      <option value="">tudo</option>
+      <option value="preencheu">preencheu</option>
+      <option value="alterou">alterou</option>
+      <option value="removeu">removeu</option>
+    </select>
+  </div>
+  <div class="gi-campo">
+    <label for="f-de">De</label>
+    <input id="f-de" type="date">
+  </div>
+  <div class="gi-campo">
+    <label for="f-ate">Até</label>
+    <input id="f-ate" type="date">
+  </div>
+  <button class="btn" id="b-limpar" type="button">Limpar</button>
+</div>
+
+<div class="gi-tabela-rolagem">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:130px">Quando</th>
+        <th style="width:95px">Imóvel</th>
+        <th style="width:150px">Campo</th>
+        <th style="width:95px">Ação</th>
+        <th>De</th>
+        <th>Para</th>
+        <th style="width:130px">Quem</th>
+      </tr>
+    </thead>
+    <tbody id="gi-corpo"><tr><td colspan="7" class="gi-mudo">carregando…</td></tr></tbody>
+  </table>
+</div>
+
+<div class="gi-rodape">
+  <span class="gi-pequeno gi-mudo" id="gi-contagem"></span>
+  <button class="btn btn-slim btn-perigo" id="b-zerar" type="button" style="margin-left:auto">Apagar histórico</button>
+</div>
+
+<p class="gi-nota">
+  Os seletores só oferecem valores que <strong>existem</strong> no histórico — filtro que devolve
+  zero por construção não ajuda ninguém. O histórico guarda os <strong>500 eventos mais recentes</strong>;
+  o mais antigo sai quando o 501 entra.
+</p>
+
+<script src="comum.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var eventos = [];
+  var el = function (id) { return document.getElementById(id); };
+
+  function filtrados() {
+    var imovel = el('f-imovel').value.trim().toLowerCase();
+    var campo = el('f-campo').value;
+    var quem = el('f-quem').value;
+    var acao = el('f-acao').value;
+    var de = el('f-de').value ? new Date(el('f-de').value + 'T00:00:00') : null;
+    var ate = el('f-ate').value ? new Date(el('f-ate').value + 'T23:59:59') : null;
+
+    return eventos.filter(function (e) {
+      if (imovel && String(e.codigo).toLowerCase().indexOf(imovel) === -1 &&
+          GI.codigoCurto(e.codigo).toLowerCase().indexOf(imovel) === -1) return false;
+      if (campo && e.campo !== campo) return false;
+      if (quem && e.quem !== quem) return false;
+      if (acao && e.acao !== acao) return false;
+      var q = new Date(e.quando);
+      if (de && q < de) return false;
+      if (ate && q > ate) return false;
+      return true;
+    });
+  }
+
+  function desenhar() {
+    var lista = filtrados();
+    var corpo = el('gi-corpo');
+
+    el('gi-contagem').textContent = lista.length + ' de ' + eventos.length + ' evento' + (eventos.length === 1 ? '' : 's');
+
+    if (!lista.length) {
+      corpo.innerHTML = '<tr><td colspan="7"><div class="gi-vazio">' +
+        (eventos.length ? 'Nenhum evento com esses filtros.' :
+          'Nada registrado ainda.<br><span class="gi-pequeno">Preencha um campo em <strong>Imóveis</strong> e o evento aparece aqui.</span>') +
+        '</div></td></tr>';
+      GI.ajustarAltura();
+      return;
+    }
+
+    corpo.innerHTML = lista.map(function (e) {
+      var cor = e.acao === 'removeu' ? 'var(--ext-color-error, #c62828)'
+              : e.acao === 'preencheu' ? 'var(--ext-color-success, #2e7d32)'
+              : 'var(--ext-color-text, #1e1e1e)';
+      return '<tr>' +
+        '<td class="gi-nowrap gi-pequeno">' + GI.dataHora(e.quando) + '</td>' +
+        '<td class="gi-nowrap"><strong>' + GI.escapar(GI.codigoCurto(e.codigo)) + '</strong></td>' +
+        '<td>' + GI.escapar(e.campo) + '</td>' +
+        '<td style="color:' + cor + '">' + GI.escapar(e.acao) + '</td>' +
+        '<td class="gi-pequeno gi-mudo">' + (e.de ? GI.escapar(e.de) : '—') + '</td>' +
+        '<td class="gi-pequeno">' + (e.para ? GI.escapar(e.para) : '—') + '</td>' +
+        '<td class="gi-pequeno">' + GI.escapar(e.quem) + '</td>' +
+      '</tr>';
+    }).join('');
+    GI.ajustarAltura();
+  }
+
+  function preencherSeletores() {
+    var campos = [], quem = [];
+    eventos.forEach(function (e) {
+      if (campos.indexOf(e.campo) === -1) campos.push(e.campo);
+      if (quem.indexOf(e.quem) === -1) quem.push(e.quem);
+    });
+    el('f-campo').innerHTML = '<option value="">todos</option>' + campos.sort().map(function (c) {
+      return '<option>' + GI.escapar(c) + '</option>';
+    }).join('');
+    el('f-quem').innerHTML = '<option value="">todos</option>' + quem.sort().map(function (q) {
+      return '<option>' + GI.escapar(q) + '</option>';
+    }).join('');
+  }
+
+  GI.pronto(function () {
+    el('gi-nav').innerHTML = GI.cabecalho('gi-historico');
+    GI.ligarNavegacao();
+
+    ['f-imovel', 'f-campo', 'f-quem', 'f-acao', 'f-de', 'f-ate'].forEach(function (id) {
+      el(id).addEventListener('input', desenhar);
+      el(id).addEventListener('change', desenhar);
+    });
+    el('b-limpar').addEventListener('click', function () {
+      ['f-imovel', 'f-campo', 'f-quem', 'f-acao', 'f-de', 'f-ate'].forEach(function (id) { el(id).value = ''; });
+      desenhar();
+    });
+    el('b-zerar').addEventListener('click', function () {
+      Promise.resolve(omni.ui.confirm({
+        title: 'Apagar histórico',
+        message: 'Apagar os ' + eventos.length + ' eventos registrados? Os valores dos imóveis não são afetados.'
+      })).then(function (ok) {
+        if (ok === false) return;
+        return GI.limpar('historico').then(function () {
+          eventos = []; preencherSeletores(); desenhar();
+          GI.aviso('Histórico apagado.', 'success');
+        });
+      }).catch(function () {});
+    });
+
+    return GI.historico().then(function (lista) {
+      eventos = lista;
+      preencherSeletores();
+      desenhar();
+    });
+  });
+})();
+</script>

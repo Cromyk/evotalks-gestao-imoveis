@@ -1,0 +1,174 @@
+<meta charset="utf-8">
+<link rel="stylesheet" href="estilo.css">
+
+<div class="gi-topo">
+  <div>
+    <h1>Consultas</h1>
+    <p class="gi-sub" id="gi-resumo">o que foi procurado no catálogo, e o que devolveu nada</p>
+  </div>
+  <div id="gi-nav"></div>
+</div>
+
+<div class="gi-erro" id="gi-erro"></div>
+
+<div class="gi-barra">
+  <div class="gi-campo" style="flex:1 1 200px">
+    <label for="f-termo">Termo buscado</label>
+    <input id="f-termo" type="search" placeholder="todos">
+  </div>
+  <div class="gi-campo">
+    <label for="f-resultado">Resultado</label>
+    <select id="f-resultado">
+      <option value="">todos</option>
+      <option value="vazio">só as que deram nada</option>
+      <option value="cheio">só as que acharam algo</option>
+    </select>
+  </div>
+  <div class="gi-campo">
+    <label for="f-quem">Quem</label>
+    <select id="f-quem"><option value="">todos</option></select>
+  </div>
+  <button class="btn" id="b-limpar" type="button">Limpar</button>
+</div>
+
+<div id="gi-cartoes" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px"></div>
+
+<div class="gi-tabela-rolagem">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:130px">Quando</th>
+        <th>Termo</th>
+        <th style="width:110px">Filtro</th>
+        <th style="width:100px" class="gi-direita">Resultados</th>
+        <th style="width:80px" class="gi-direita">Tempo</th>
+        <th style="width:220px">Como foi respondida</th>
+        <th style="width:130px">Quem</th>
+      </tr>
+    </thead>
+    <tbody id="gi-corpo"><tr><td colspan="7" class="gi-mudo">carregando…</td></tr></tbody>
+  </table>
+</div>
+
+<div class="gi-rodape">
+  <span class="gi-pequeno gi-mudo" id="gi-contagem"></span>
+  <button class="btn btn-slim btn-perigo" id="b-zerar" type="button" style="margin-left:auto">Apagar registro</button>
+</div>
+
+<p class="gi-nota">
+  <strong>"Nada" é o sinal mais útil desta tela.</strong> Busca sem resultado significa uma de duas
+  coisas: falta imóvel no catálogo, ou o filtro está errado. No portal esta tela registrava o que a
+  IA perguntava pelo MCP; aqui registra as buscas feitas na tela <strong>Imóveis</strong> — quando a
+  extensão passar a atender a IA, as duas fontes caem na mesma lista.
+  Guardadas as <strong>200 consultas mais recentes</strong>.
+</p>
+
+<script src="comum.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var consultas = [];
+  var el = function (id) { return document.getElementById(id); };
+
+  function filtradas() {
+    var termo = el('f-termo').value.trim().toLowerCase();
+    var resultado = el('f-resultado').value;
+    var quem = el('f-quem').value;
+
+    return consultas.filter(function (c) {
+      if (termo && String(c.termo || '').toLowerCase().indexOf(termo) === -1) return false;
+      if (resultado === 'vazio' && c.resultados > 0) return false;
+      if (resultado === 'cheio' && !c.resultados) return false;
+      if (quem && c.quem !== quem) return false;
+      return true;
+    });
+  }
+
+  function cartoes(lista) {
+    var vazias = lista.filter(function (c) { return !c.resultados; }).length;
+    var media = lista.length ? Math.round(lista.reduce(function (s, c) { return s + (c.ms || 0); }, 0) / lista.length) : 0;
+    var dados = [
+      { r: 'Consultas', v: lista.length },
+      { r: 'Sem resultado', v: vazias + (lista.length ? ' (' + Math.round(vazias * 100 / lista.length) + '%)' : '') },
+      { r: 'Tempo médio', v: media + ' ms' }
+    ];
+    el('gi-cartoes').innerHTML = dados.map(function (d) {
+      return '<div class="gi-cartao" style="flex:1 1 150px;margin:0">' +
+        '<div class="gi-ajuda">' + d.r + '</div>' +
+        '<div style="font-size:20px;font-weight:600;margin-top:2px">' + GI.escapar(d.v) + '</div></div>';
+    }).join('');
+  }
+
+  function desenhar() {
+    var lista = filtradas();
+    var corpo = el('gi-corpo');
+
+    cartoes(lista);
+    el('gi-contagem').textContent = lista.length + ' de ' + consultas.length + ' consulta' + (consultas.length === 1 ? '' : 's');
+
+    if (!lista.length) {
+      corpo.innerHTML = '<tr><td colspan="7"><div class="gi-vazio">' +
+        (consultas.length ? 'Nenhuma consulta com esses filtros.' :
+          'Nada registrado ainda.<br><span class="gi-pequeno">Faça uma busca na tela <strong>Imóveis</strong> e ela aparece aqui.</span>') +
+        '</div></td></tr>';
+      GI.ajustarAltura();
+      return;
+    }
+
+    corpo.innerHTML = lista.map(function (c) {
+      var vazia = !c.resultados;
+      return '<tr' + (vazia ? ' style="background:rgba(198,40,40,.05)"' : '') + '>' +
+        '<td class="gi-nowrap gi-pequeno">' + GI.dataHora(c.quando) + '</td>' +
+        '<td>' + (c.termo ? GI.escapar(c.termo) : '<span class="gi-mudo">(sem termo — listagem)</span>') + '</td>' +
+        '<td class="gi-pequeno">' + (c.estado ? GI.escapar(c.estado) : '<span class="gi-mudo">—</span>') + '</td>' +
+        '<td class="gi-direita' + (vazia ? '" style="color:var(--ext-color-error,#c62828);font-weight:600' : '') + '">' + c.resultados + '</td>' +
+        '<td class="gi-direita gi-pequeno">' + (c.ms || 0) + ' ms</td>' +
+        '<td class="gi-pequeno gi-mudo">' + GI.escapar(c.origem || '') + '</td>' +
+        '<td class="gi-pequeno">' + GI.escapar(c.quem) + '</td>' +
+      '</tr>';
+    }).join('');
+    GI.ajustarAltura();
+  }
+
+  function preencherSeletor() {
+    var quem = [];
+    consultas.forEach(function (c) { if (quem.indexOf(c.quem) === -1) quem.push(c.quem); });
+    el('f-quem').innerHTML = '<option value="">todos</option>' + quem.sort().map(function (q) {
+      return '<option>' + GI.escapar(q) + '</option>';
+    }).join('');
+  }
+
+  GI.pronto(function () {
+    el('gi-nav').innerHTML = GI.cabecalho('gi-consultas');
+    GI.ligarNavegacao();
+
+    ['f-termo', 'f-resultado', 'f-quem'].forEach(function (id) {
+      el(id).addEventListener('input', desenhar);
+      el(id).addEventListener('change', desenhar);
+    });
+    el('b-limpar').addEventListener('click', function () {
+      ['f-termo', 'f-resultado', 'f-quem'].forEach(function (id) { el(id).value = ''; });
+      desenhar();
+    });
+    el('b-zerar').addEventListener('click', function () {
+      Promise.resolve(omni.ui.confirm({
+        title: 'Apagar registro de consultas',
+        message: 'Apagar as ' + consultas.length + ' consultas registradas?'
+      })).then(function (ok) {
+        if (ok === false) return;
+        return GI.limpar('consultas').then(function () {
+          consultas = []; preencherSeletor(); desenhar();
+          GI.aviso('Registro apagado.', 'success');
+        });
+      }).catch(function () {});
+    });
+
+    return GI.consultas().then(function (lista) {
+      consultas = lista;
+      preencherSeletor();
+      desenhar();
+    });
+  });
+})();
+</script>
