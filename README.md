@@ -66,8 +66,9 @@ Sempre restrito a você primeiro: a entrega é **imediata** para todo usuário q
 
 ## Limites conhecidos
 
-- Os itens de menu abrem em **diálogo** (`mode: dialog`, `size: lg`) — foi a forma validada pelo
-  probe. `fullscreen` é possível e dá mais espaço às tabelas; trocar exige republicar o manifest.
+- Os itens de menu abrem em **tela cheia** (`mode: fullscreen`), desde a 0.2.0 — a 0.1.0 usava
+  diálogo e a lista ficava espremida. **`size` não é aceito fora de `dialog`**: em `fullscreen` o
+  campo tem de sair do manifest.
 - `url` de item de menu **não aceita `#` nem query string**: cada tela é um arquivo próprio, e é
   por isso que não há SPA com rota por hash.
 - Renomear campo usa `omni.forms.openDynamic`; onde ele não estiver disponível, a tela avisa em vez
