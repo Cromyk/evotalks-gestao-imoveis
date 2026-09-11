@@ -1,8 +1,8 @@
 # Gerenciamento de Imóveis — extensão do EvoTalks
 
 Porte do **portal de taxas do William Imóveis** para dentro do EvoTalks, como extensão nativa:
-um menu superior **Gerenciamento de Imóveis** com quatro telas — **Imóveis**, **Campos**,
-**Histórico** e **Consultas**.
+um menu superior **Gerenciamento de Imóveis** com três telas — **Imóveis**, **Campos** e
+**Histórico**.
 
 Registra, por imóvel, informações que **não aparecem no site** (taxas, IPTU, encargos, observações
 da administração) e que precisam chegar a quem atende.
@@ -12,20 +12,19 @@ da administração) e que precisam chegar a quem atende.
 | `/imoveis` + `/imovel/:codigo` | tela **Imóveis** — lista, filtros, 🟢/🟡 e o formulário de lançamento |
 | `/campos` | tela **Campos** — os cinco tipos, recorrência padrão, ativar/desativar/apagar |
 | `/historico` | tela **Histórico** — quem, quando, de → para, com filtros |
-| `/consultas` | tela **Consultas** — o que se procurou, e o que devolveu nada |
+| `/consultas` | **removida na 0.3.0** — o que a IA consulta se vê no MCP do portal, não aqui |
 | `/login`, `/usuarios`, CSRF, sessão | some: a extensão herda o usuário logado do EvoTalks |
 | espelho Postgres + sync 6h + XML | some: o catálogo já está na instância (`products`) |
 
 ## Arquivos
 
 ```
-manifest.json          identidade, config e as contribuições (o menu e os 4 itens)
-app/comum.js           SDK omni, persistência, catálogo, formatação — a camada que as 4 telas usam
+manifest.json          identidade, config e as contribuições (o menu e os 3 itens)
+app/comum.js           SDK omni, persistência, catálogo, formatação — a camada que as 3 telas usam
 app/estilo.css         tema por tokens --ext-* (segue a whitelabel da instância)
 app/imoveis.html       lista + detalhe do imóvel
 app/campos.html        definição dos campos
 app/historico.html     eventos de edição
-app/consultas.html     registro de buscas
 ```
 
 ## Onde o dado mora (e o que trocar depois)

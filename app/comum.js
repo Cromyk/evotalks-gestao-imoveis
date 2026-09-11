@@ -1,4 +1,4 @@
-/* Gerenciamento de Imóveis — camada comum às quatro telas.
+/* Gerenciamento de Imóveis — camada comum às três telas.
    Roda dentro do contêiner da extensão: origem opaca, sem cookie, sem JWT.
    Tudo que fala com o EvoTalks passa por window.omni. */
 (function (global) {
@@ -81,7 +81,7 @@
      por backend/armazenamento permanente quando a extensão sair do piloto:
      só estas funções falam com a persistência. */
 
-  var CHAVES = { campos: 'gi.campos', valores: 'gi.valores', historico: 'gi.historico', consultas: 'gi.consultas' };
+  var CHAVES = { campos: 'gi.campos', valores: 'gi.valores', historico: 'gi.historico' };
 
   function ler(chave, padrao) {
     if (!global.omni || !omni.storage) return Promise.resolve(padrao);
@@ -103,7 +103,6 @@
   GI.valores = function () { return ler(CHAVES.valores, {}); };
   GI.salvarValores = function (mapa) { return gravar(CHAVES.valores, mapa); };
   GI.historico = function () { return ler(CHAVES.historico, []); };
-  GI.consultas = function () { return ler(CHAVES.consultas, []); };
 
   GI.registrarHistorico = function (eventos) {
     if (!eventos || !eventos.length) return Promise.resolve();
@@ -118,14 +117,9 @@
     });
   };
 
-  GI.registrarConsulta = function (consulta) {
-    return GI.consultas().then(function (lista) {
-      consulta.quando = new Date().toISOString();
-      consulta.quem = GI.usuario();
-      lista.unshift(consulta);
-      return gravar(CHAVES.consultas, lista.slice(0, 200));
-    }).catch(function () {});
-  };
+  /* A tela Consultas saiu na 0.3.0. O registro de buscas deixou de ter leitor, então deixou
+     de ser gravado — dado que ninguém lê é só consumo do orçamento do storage. */
+  GI.registrarConsulta = function () { return Promise.resolve(); };
 
   GI.limpar = function (qual) {
     var chave = CHAVES[qual];
@@ -340,8 +334,7 @@
     var telas = [
       { id: 'gi-imoveis',   nome: 'Imóveis' },
       { id: 'gi-campos',    nome: 'Campos' },
-      { id: 'gi-historico', nome: 'Histórico' },
-      { id: 'gi-consultas', nome: 'Consultas' }
+      { id: 'gi-historico', nome: 'Histórico' }
     ];
     return '<nav class="gi-nav">' + telas.map(function (t) {
       return t.id === ativo
