@@ -1,10 +1,11 @@
 /* Tema: sempre var(--ext-*) com reserva — a instância troca as cores em runtime. */
-html, body { height: auto; overflow-x: hidden; margin: 0; }
+html, body { min-height: 100%; overflow-x: hidden; margin: 0; }
 body {
   font: var(--ext-font-size, 14px) var(--ext-font-family, Roboto, "Segoe UI", sans-serif);
   background: var(--ext-color-bg, #fff);
   color: var(--ext-color-text, #1e1e1e);
-  padding: 14px 16px 20px;
+  padding: 20px 26px 28px;
+  min-height: 100vh;
 }
 * { box-sizing: border-box; }
 
@@ -102,3 +103,11 @@ tbody tr:hover { background: var(--ext-color-primary-soft, rgba(25,118,210,.06))
 .gi-rotulo-campo { font-size: 13px; font-weight: 500; }
 .gi-ajuda { font-size: 11px; color: var(--ext-color-text-muted, #6b6b6b); }
 .gi-previa { font-size: 12px; color: var(--ext-color-primary-dark, #145ea8); min-height: 16px; }
+
+/* Tela cheia: a página ocupa a janela inteira, e a tabela rola dentro dela
+   em vez de esticar o documento. */
+.gi-conteudo { max-width: 1500px; margin: 0 auto; }
+@media (min-width: 1100px) {
+  .gi-linha-campo { grid-template-columns: minmax(200px, 1.2fr) minmax(160px, .9fr) minmax(140px, .7fr) minmax(240px, 1.4fr); }
+  th, td { padding-left: 10px; padding-right: 10px; }
+}

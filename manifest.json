@@ -1,10 +1,12 @@
 {
   "manifestVersion": 1,
   "id": "evotalks.gestao-imoveis",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "Gerenciamento de Imóveis",
   "description": "Campos internos por imóvel (taxas, encargos, observações) que não aparecem no site, com histórico de autoria e registro de consultas. Porte do portal de taxas do William Imóveis para dentro do EvoTalks.",
-  "author": { "name": "Evotalks / Cromyk" },
+  "author": {
+    "name": "Evotalks / Cromyk"
+  },
   "config": [
     {
       "key": "marca",
@@ -34,36 +36,51 @@
       "type": "topMenu",
       "title": "Gerenciamento de Imóveis",
       "icon": "icon-far-building",
-      "visibility": { "userTypes": [0, 1] },
-      "presentation": { "mode": "menu" },
+      "visibility": {
+        "userTypes": [
+          0,
+          1
+        ]
+      },
+      "presentation": {
+        "mode": "menu"
+      },
       "items": [
         {
           "id": "gi-imoveis",
           "title": "Imóveis",
           "icon": "icon-far-building",
           "url": "app/imoveis.html",
-          "presentation": { "mode": "dialog", "size": "lg" }
+          "presentation": {
+            "mode": "fullscreen"
+          }
         },
         {
           "id": "gi-campos",
           "title": "Campos",
           "icon": "icon-far-list",
           "url": "app/campos.html",
-          "presentation": { "mode": "dialog", "size": "lg" }
+          "presentation": {
+            "mode": "fullscreen"
+          }
         },
         {
           "id": "gi-historico",
           "title": "Histórico",
           "icon": "icon-far-clock",
           "url": "app/historico.html",
-          "presentation": { "mode": "dialog", "size": "lg" }
+          "presentation": {
+            "mode": "fullscreen"
+          }
         },
         {
           "id": "gi-consultas",
           "title": "Consultas",
           "icon": "icon-far-search",
           "url": "app/consultas.html",
-          "presentation": { "mode": "dialog", "size": "lg" }
+          "presentation": {
+            "mode": "fullscreen"
+          }
         }
       ]
     }
