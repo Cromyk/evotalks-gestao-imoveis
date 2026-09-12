@@ -104,37 +104,80 @@
 
   GI.usaPortal = function () { return !!(baseDoPortal() && tokenDoPortal()); };
 
-  /* fetch direto, não omni.http.request: a CSP do contêiner libera o origin de
-     onde o HTML veio, e o portal responde `Access-Control-Allow-Origin: *`.
-     Escapa da cota de 30 req/min por usuário do omni.http. */
-  function chamar(caminho, opcoes) {
-    opcoes = opcoes || {};
-    var url = baseDoPortal() + caminho;
-    var cab = {
-      'Authorization': 'Bearer ' + tokenDoPortal(),
-      'X-GI-Autor': GI.usuario(),
-      'X-GI-User-Id': String((ctx && ctx.user && ctx.user.id) || '')
-    };
-    if (opcoes.corpo !== undefined) cab['Content-Type'] = 'application/json';
+  /* Como a chamada sai daqui, e por que NÃO é sempre fetch.
+     A CSP do contêiner libera em connect-src apenas o origin de onde o HTML
+     veio (aqui, o GitHub Pages) mais o da própria aplicação. O portal fica em
+     outro domínio, então fetch direto é BLOQUEADO — e o erro que chega é só
+     "Failed to fetch", sem dizer que foi a CSP.
+     omni.http.request não tem esse problema: executa no backend da instância.
+     Custa a cota de 30 req/min por usuário, o que sobra para telas de cadastro.
+     O fetch continua sendo usado quando o portal serve o próprio HTML (mesma
+     origem) — aí é mais rápido e não consome cota. */
+  function mesmaOrigem() {
+    try {
+      var u = new URL(baseDoPortal());
+      return u.origin === global.location.origin;
+    } catch (e) { return false; }
+  }
 
+  function erroDe(status, corpo) {
+    var dados = null;
+    try { dados = corpo ? JSON.parse(corpo) : null; } catch (e) { /* não-JSON */ }
+    var msg = (dados && dados.erro) ? dados.erro : ("HTTP " + status);
+    if (status === 401) msg = "token do portal recusado";
+    if (status === 403 && dados && dados.detalhe) msg = dados.detalhe;
+    var err = new Error(msg);
+    err.status = status;
+    err.dados = dados;
+    return err;
+  }
+
+  function cabecalhos(temCorpo) {
+    var cab = {
+      "Authorization": "Bearer " + tokenDoPortal(),
+      "X-GI-Autor": GI.usuario(),
+      "X-GI-User-Id": String((ctx && ctx.user && ctx.user.id) || "")
+    };
+    if (temCorpo) cab["Content-Type"] = "application/json";
+    return cab;
+  }
+
+  function viaFetch(url, opcoes) {
     return fetch(url, {
-      method: opcoes.corpo !== undefined ? 'POST' : 'GET',
-      headers: cab,
+      method: opcoes.corpo !== undefined ? "POST" : "GET",
+      headers: cabecalhos(opcoes.corpo !== undefined),
       body: opcoes.corpo !== undefined ? JSON.stringify(opcoes.corpo) : undefined
     }).then(function (r) {
       return r.text().then(function (txt) {
-        var dados = null;
-        try { dados = txt ? JSON.parse(txt) : null; } catch (e) { /* resposta não-JSON */ }
-        if (!r.ok) {
-          var msg = (dados && dados.erro) ? dados.erro : ('HTTP ' + r.status);
-          if (r.status === 401) msg = 'token do portal recusado';
-          var err = new Error(msg);
-          err.status = r.status;
-          throw err;
-        }
-        return dados;
+        if (!r.ok) throw erroDe(r.status, txt);
+        try { return txt ? JSON.parse(txt) : null; } catch (e) { return null; }
       });
     });
+  }
+
+  function viaOmni(url, opcoes) {
+    if (!global.omni || !omni.http || !omni.http.request) {
+      return Promise.reject(new Error("sem omni.http.request nesta instância"));
+    }
+    return Promise.resolve(omni.http.request({
+      url: url,
+      method: opcoes.corpo !== undefined ? "POST" : "GET",
+      headers: cabecalhos(opcoes.corpo !== undefined),
+      body: opcoes.corpo !== undefined ? JSON.stringify(opcoes.corpo) : undefined,
+      timeout: 20000
+    })).then(function (r) {
+      // O body volta em TEXTO, sempre — o JSON.parse é nosso.
+      if (!r || r.status < 200 || r.status >= 300) {
+        throw erroDe(r ? r.status : 0, r && r.body);
+      }
+      try { return r.body ? JSON.parse(r.body) : null; } catch (e) { return null; }
+    });
+  }
+
+  function chamar(caminho, opcoes) {
+    opcoes = opcoes || {};
+    var url = baseDoPortal() + caminho;
+    return mesmaOrigem() ? viaFetch(url, opcoes) : viaOmni(url, opcoes);
   }
   GI.chamarPortal = chamar;
 
