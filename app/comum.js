@@ -112,7 +112,8 @@
     var url = baseDoPortal() + caminho;
     var cab = {
       'Authorization': 'Bearer ' + tokenDoPortal(),
-      'X-GI-Autor': GI.usuario()
+      'X-GI-Autor': GI.usuario(),
+      'X-GI-User-Id': String((ctx && ctx.user && ctx.user.id) || '')
     };
     if (opcoes.corpo !== undefined) cab['Content-Type'] = 'application/json';
 
@@ -586,9 +587,13 @@
     var telas = [
       { id: 'gi-imoveis',   nome: 'Imóveis' },
       { id: 'gi-campos',    nome: 'Campos' },
-      { id: 'gi-historico', nome: 'Histórico' }
+      { id: 'gi-historico', nome: 'Histórico' },
+      { id: 'gi-acesso', nome: 'Acesso', soAdmin: true }
     ];
-    return '<nav class="gi-nav">' + telas.map(function (t) {
+    var ehAdmin = !!(ctx && ctx.user && ctx.user.permissions && ctx.user.permissions.isAdmin);
+    return '<nav class="gi-nav">' + telas.filter(function (t) {
+      return !t.soAdmin || ehAdmin;
+    }).map(function (t) {
       return t.id === ativo
         ? '<span class="gi-nav-item gi-nav-ativo">' + t.nome + '</span>'
         : '<button type="button" class="gi-nav-item" data-tela="' + t.id + '">' + t.nome + '</button>';
