@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1,
   "id": "evotalks.gestao-imoveis",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "name": "Gerenciamento de Imóveis",
   "description": "Campos internos por imóvel (taxas, encargos, observações) que não aparecem no site, com histórico de autoria. Porte do portal de taxas do William Imóveis para dentro do EvoTalks.",
   "author": {
@@ -82,6 +82,15 @@
           "title": "Histórico",
           "icon": "icon-far-clock",
           "url": "app/historico.html",
+          "presentation": {
+            "mode": "fullscreen"
+          }
+        },
+        {
+          "id": "gi-config",
+          "title": "Configurações",
+          "icon": "icon-far-gear",
+          "url": "app/config.html",
           "presentation": {
             "mode": "fullscreen"
           }

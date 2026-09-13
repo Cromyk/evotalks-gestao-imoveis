@@ -630,7 +630,8 @@
     var telas = [
       { id: 'gi-imoveis',   nome: 'Imóveis' },
       { id: 'gi-campos',    nome: 'Campos' },
-      { id: 'gi-historico', nome: 'Histórico' }
+      { id: 'gi-historico', nome: 'Histórico' },
+      { id: 'gi-config', nome: 'Configurações' }
     ];
     return '<nav class="gi-nav">' + telas.map(function (t) {
       return t.id === ativo

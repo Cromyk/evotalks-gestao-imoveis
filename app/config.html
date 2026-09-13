@@ -1,0 +1,213 @@
+<meta charset="utf-8">
+<link rel="stylesheet" href="estilo.css">
+
+<div class="gi-topo">
+  <div>
+    <h1>Configurações</h1>
+    <p class="gi-sub">de onde vem o catálogo de imóveis, e quando ele foi atualizado</p>
+  </div>
+  <div id="gi-nav"></div>
+</div>
+
+<div class="gi-erro" id="gi-erro"></div>
+
+<section id="gi-painel" style="display:none">
+
+  <!-- ------------------------------------------------------------- estado -->
+  <div class="gi-cartao">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <strong style="font-size:14px">Atualização do catálogo</strong>
+      <span class="gi-ajuda" id="c-intervalo"></span>
+    </div>
+    <div id="c-estado"></div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- URL -->
+  <div class="gi-cartao">
+    <strong style="font-size:14px">Origem do feed</strong>
+    <p class="gi-ajuda" style="margin:6px 0 10px">
+      É o endereço XML de onde o catálogo é lido. Se a imobiliária trocar esse endereço — ou a
+      chave que vai nele — o catálogo <strong>para de atualizar em silêncio</strong>: nada dá erro,
+      os imóveis é que envelhecem. Troque aqui e o próximo ciclo já usa o novo.
+    </p>
+
+    <div class="gi-campo" style="margin-bottom:10px">
+      <label>Em uso agora</label>
+      <div id="c-atual" class="gi-pequeno" style="font-family:monospace;word-break:break-all"></div>
+      <div class="gi-ajuda" id="c-origem"></div>
+    </div>
+
+    <div class="gi-campo" style="margin-bottom:8px">
+      <label for="c-url">Novo endereço</label>
+      <input id="c-url" type="url" placeholder="https://api.imogestao.com.br/portais?c=...&amp;ci=535"
+             autocomplete="off" spellcheck="false">
+      <div class="gi-ajuda">Cole o endereço inteiro, com tudo o que vem depois do <code>?</code>.</div>
+    </div>
+
+    <div class="gi-rodape">
+      <button class="btn" id="b-testar" type="button">Testar</button>
+      <button class="btn btn-primario" id="b-salvar" type="button" disabled>Salvar</button>
+      <span class="gi-pequeno" id="c-resultado"></span>
+    </div>
+  </div>
+</section>
+
+<section id="gi-negado" class="gi-vazio" style="display:none"></section>
+
+<p class="gi-nota">
+  <strong>Testar antes de salvar não é formalidade.</strong> Um endereço errado gravado aqui deixa o
+  catálogo parado sem nenhum aviso, e o erro só aparece dias depois — quando a assistente oferecer
+  um imóvel que já foi vendido. Por isso o botão de salvar só destrava depois que o teste encontra
+  imóveis de verdade no endereço.
+</p>
+
+<script src="comum.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var el = function (id) { return document.getElementById(id); };
+  var urlTestada = '';
+
+  function quando(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    var horas = (Date.now() - d.getTime()) / 3600000;
+    var quanto = horas < 1 ? 'há menos de 1 hora'
+               : horas < 48 ? 'há ' + Math.round(horas) + ' horas'
+               : 'há ' + Math.round(horas / 24) + ' dias';
+    return GI.dataHora(iso) + ' (' + quanto + ')';
+  }
+
+  function desenharEstado(dados) {
+    var s = dados.sync && dados.sync.atual;
+    var alvo = el('c-estado');
+
+    el('c-intervalo').textContent = 'a cada ' + dados.intervaloHoras + 'h';
+
+    if (!s || !s.ultimo_sync) {
+      alvo.innerHTML = '<div class="gi-vazio">O catálogo nunca foi sincronizado.<br>' +
+        '<span class="gi-pequeno">Confira o endereço abaixo e se o serviço de atualização está no ar.</span></div>';
+      return;
+    }
+
+    var horas = Number(s.horas_desde || 0);
+    // O alerta é relativo ao intervalo configurado: atrasar 8h com ciclo de 6h
+    // é sintoma; com ciclo de 24h, é normal.
+    var limite = Math.max(dados.intervaloHoras * 2, 26);
+    var atrasado = horas > limite;
+
+    alvo.innerHTML =
+      '<div style="display:flex;gap:24px;flex-wrap:wrap">' +
+        '<div><div class="gi-ajuda">Última atualização</div>' +
+          '<div style="font-size:15px;font-weight:600;' +
+          (atrasado ? 'color:var(--ext-color-error,#c62828)' : '') + '">' +
+          quando(s.ultimo_sync) + '</div></div>' +
+        '<div><div class="gi-ajuda">Imóveis no catálogo</div>' +
+          '<div style="font-size:15px;font-weight:600">' + (s.itens_ativos || 0) + '</div></div>' +
+        '<div><div class="gi-ajuda">Na última rodada</div>' +
+          '<div class="gi-pequeno">+' + (s.itens_criados || 0) + ' novos · −' +
+          (s.itens_excluidos || 0) + ' saíram</div></div>' +
+      '</div>' +
+      (atrasado
+        ? '<div class="gi-nota" style="margin-top:10px;background:rgba(198,40,40,.08);' +
+          'color:var(--ext-color-error,#c62828)">⚠ O catálogo não atualiza há ' +
+          Math.round(horas) + ' horas, e o ciclo é de ' + dados.intervaloHoras + 'h. ' +
+          'Confira o endereço do feed e se o serviço de atualização está no ar — ' +
+          'enquanto isso, a assistente responde com um catálogo antigo.</div>'
+        : '');
+  }
+
+  function carregar() {
+    return GI.chamarPortal('/config').then(function (r) {
+      el('c-atual').textContent = r.urlFeed.definida ? r.urlFeed.mascarada : '(nenhum endereço configurado)';
+      el('c-origem').textContent =
+        r.urlFeed.origem === 'tela'
+          ? 'cadastrado aqui' + (r.urlFeed.atualizado_por ? ' por ' + r.urlFeed.atualizado_por : '') +
+            (r.urlFeed.atualizado_em ? ' · ' + GI.dataHora(r.urlFeed.atualizado_em) : '')
+          : r.urlFeed.origem === 'ambiente'
+            ? 'vem da configuração do servidor — trocar aqui passa a valer sobre ela'
+            : 'nada configurado';
+      desenharEstado(r);
+      GI.ajustarAltura();
+    });
+  }
+
+  function testar() {
+    var url = el('c-url').value.trim();
+    if (!url) { GI.aviso('Cole o endereço antes de testar.', 'error'); return; }
+
+    el('b-testar').disabled = true;
+    el('b-salvar').disabled = true;
+    el('c-resultado').textContent = 'testando… (o feed é grande, pode levar um minuto)';
+    el('c-resultado').style.color = '';
+
+    GI.chamarPortal('/config/testar-feed', { corpo: { url: url } }).then(function (r) {
+      el('b-testar').disabled = false;
+      if (r.ok) {
+        urlTestada = url;
+        el('b-salvar').disabled = false;
+        el('c-resultado').style.color = 'var(--ext-color-success, #2e7d32)';
+        el('c-resultado').textContent = '✓ ' + r.detalhe + ' (' +
+          (r.bytes / 1048576).toFixed(1) + ' MB em ' + Math.round(r.ms / 1000) + 's)';
+      } else {
+        urlTestada = '';
+        el('c-resultado').style.color = 'var(--ext-color-error, #c62828)';
+        el('c-resultado').textContent = '✗ ' + (r.detalhe || 'o endereço não respondeu como esperado');
+      }
+      GI.ajustarAltura();
+    }).catch(function (e) {
+      el('b-testar').disabled = false;
+      el('c-resultado').style.color = 'var(--ext-color-error, #c62828)';
+      el('c-resultado').textContent = '✗ ' + (e.message || e);
+      GI.ajustarAltura();
+    });
+  }
+
+  function salvar() {
+    var url = el('c-url').value.trim();
+    if (url !== urlTestada) {
+      GI.aviso('O endereço mudou depois do teste — teste de novo antes de salvar.', 'error');
+      el('b-salvar').disabled = true;
+      return;
+    }
+    el('b-salvar').disabled = true;
+    GI.chamarPortal('/config', { corpo: { urlFeed: url } }).then(function (r) {
+      el('c-url').value = '';
+      urlTestada = '';
+      el('c-resultado').style.color = '';
+      el('c-resultado').textContent = r.aviso || '';
+      GI.aviso('Endereço do feed atualizado.', 'success');
+      return carregar();
+    }).catch(function (e) {
+      el('b-salvar').disabled = false;
+      GI.aviso(e.message || String(e), 'error');
+    });
+  }
+
+  GI.pronto(function () {
+    el('gi-nav').innerHTML = GI.cabecalho('gi-config');
+    GI.ligarNavegacao();
+
+    if (GI.modo !== 'portal') {
+      el('gi-negado').style.display = 'block';
+      el('gi-negado').innerHTML = 'Esta tela precisa do <strong>portal</strong> configurado.<br>' +
+        '<span class="gi-pequeno">' +
+        (GI.modo === 'portal-fora'
+          ? 'O portal não respondeu: ' + GI.escapar(GI.portalErro)
+          : 'No modo local não há catálogo sendo sincronizado.') + '</span>';
+      return;
+    }
+
+    el('gi-painel').style.display = 'block';
+    el('b-testar').addEventListener('click', testar);
+    el('b-salvar').addEventListener('click', salvar);
+    // Mexeu no campo depois de testar: o salvar volta a travar.
+    el('c-url').addEventListener('input', function () {
+      if (el('c-url').value.trim() !== urlTestada) el('b-salvar').disabled = true;
+    });
+
+    return carregar();
+  });
+})();
+</script>
