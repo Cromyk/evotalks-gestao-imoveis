@@ -20,8 +20,8 @@
       <span class="gi-ajuda" id="c-intervalo"></span>
     </div>
     <div id="c-estado"></div>
+    <div id="c-rodadas"></div>
   </div>
-
   <!-- ---------------------------------------------------------------- URL -->
   <div class="gi-cartao">
     <strong style="font-size:14px">Origem do feed</strong>
@@ -32,11 +32,14 @@
     </p>
 
     <div class="gi-campo" style="margin-bottom:10px">
-      <label>Em uso agora</label>
+      <label>Em uso agora — é esta URL que o sync busca a cada rodada</label>
       <div id="c-atual" class="gi-pequeno" style="font-family:monospace;word-break:break-all"></div>
       <div class="gi-ajuda" id="c-origem"></div>
+      <div style="margin-top:6px">
+        <button class="btn" id="b-revelar" type="button" style="padding:2px 8px;font-size:12px">Mostrar endereço completo</button>
+        <span class="gi-ajuda" id="c-revelar-aviso"></span>
+      </div>
     </div>
-
     <div class="gi-campo" style="margin-bottom:8px">
       <label for="c-url">Novo endereço</label>
       <input id="c-url" type="url" placeholder="https://api.imogestao.com.br/portais?c=...&amp;ci=535"
@@ -79,6 +82,19 @@
     return GI.dataHora(iso) + ' (' + quanto + ')';
   }
 
+  var ROTULO = {
+    ok: '✓ concluída',
+    rejeitado: '⚠ rejeitada',
+    erro: '✗ erro',
+    em_andamento: '… em andamento'
+  };
+  var COR = {
+    ok: 'var(--ext-color-success,#2e7d32)',
+    rejeitado: 'var(--ext-color-warning,#e65100)',
+    erro: 'var(--ext-color-error,#c62828)',
+    em_andamento: ''
+  };
+
   function desenharEstado(dados) {
     var s = dados.sync && dados.sync.atual;
     var alvo = el('c-estado');
@@ -86,7 +102,7 @@
     el('c-intervalo').textContent = 'a cada ' + dados.intervaloHoras + 'h';
 
     if (!s || !s.ultimo_sync) {
-      alvo.innerHTML = '<div class="gi-vazio">O catálogo nunca foi sincronizado.<br>' +
+      alvo.innerHTML = '<div class="gi-vazio">O catálogo nunca foi sincronizado com sucesso.<br>' +
         '<span class="gi-pequeno">Confira o endereço abaixo e se o serviço de atualização está no ar.</span></div>';
       return;
     }
@@ -118,9 +134,97 @@
         : '');
   }
 
+  /* "Última atualização" é a última rodada que DEU CERTO. Uma rodada rejeitada
+     depois dela não move esse número — e era exatamente o buraco da tela antiga:
+     o sync podia estar sendo recusado há dias (feed encolheu, banda de sanidade
+     barrou) e a tela seguia mostrando um horário tranquilo. Por isso as rodadas
+     aparecem aqui, com o que aconteceu em cada uma. */
+  function desenharRodadas(dados) {
+    var alvo = el('c-rodadas');
+    var lista = (dados.sync && dados.sync.ultimos) || [];
+    var orfaos = (dados.sync && dados.sync.orfaos) || null;
+    var ok = dados.sync && dados.sync.atual && dados.sync.atual.ultimo_sync;
+    var html = '';
+
+    // A rodada mais recente pode ter falhado DEPOIS do último sucesso.
+    var ultima = lista[0];
+    if (ultima && ultima.status !== 'ok') {
+      html += '<div class="gi-nota" style="margin-top:10px;background:rgba(230,81,0,.08);' +
+        'color:var(--ext-color-warning,#e65100)">' +
+        '<strong>A tentativa mais recente não entrou:</strong> ' + ROTULO[ultima.status] +
+        (ultima.concluido_em ? ' em ' + GI.dataHora(ultima.concluido_em) : '') +
+        (ultima.detalhe ? '.<br>' + GI.escapar(ultima.detalhe) : '.') +
+        (ok ? '<br><span class="gi-pequeno">O catálogo em uso continua sendo o da última rodada que deu certo.</span>' : '') +
+        '</div>';
+    }
+
+    if (orfaos && orfaos.imoveis > 0) {
+      html += '<div class="gi-nota" style="margin-top:10px">' +
+        '<strong>' + orfaos.imoveis + ' imóvel(is) com informação interna saíram do feed</strong> — ' +
+        orfaos.valores + ' lançamento(s) preservado(s). Nada foi apagado: se o imóvel voltar ao ' +
+        'catálogo, os valores reaparecem com ele.</div>';
+    }
+
+    if (lista.length) {
+      html += '<details style="margin-top:10px">' +
+        '<summary class="gi-pequeno" style="cursor:pointer">Últimas ' + lista.length + ' rodadas</summary>' +
+        '<div class="gi-tabela-rolagem" style="margin-top:8px"><table><thead><tr>' +
+        '<th>Quando</th><th>Resultado</th><th>Recebidos</th><th>No catálogo</th><th>Detalhe</th>' +
+        '</tr></thead><tbody>' +
+        lista.map(function (r) {
+          return '<tr>' +
+            '<td class="gi-pequeno">' + (r.concluido_em ? GI.dataHora(r.concluido_em) : '—') + '</td>' +
+            '<td class="gi-pequeno" style="color:' + (COR[r.status] || '') + '">' +
+              (ROTULO[r.status] || GI.escapar(r.status)) + '</td>' +
+            '<td class="gi-pequeno">' + (r.itens_recebidos === null || r.itens_recebidos === undefined ? '—' : r.itens_recebidos) + '</td>' +
+            '<td class="gi-pequeno">' + (r.itens_ativos === null || r.itens_ativos === undefined ? '—' : r.itens_ativos) + '</td>' +
+            '<td class="gi-pequeno">' + GI.escapar(r.detalhe || '') + '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div></details>';
+    }
+
+    alvo.innerHTML = html;
+  }
+
+  /* A URL vive mascarada porque leva credencial na query. Revelar é um clique,
+     e o pedido vai ao portal na hora — a URL inteira não fica pendurada na tela
+     desde a abertura só para o caso de alguém querer ver. */
+  var urlRevelada = false;
+
+  function revelar() {
+    var b = el('b-revelar');
+
+    if (urlRevelada) {
+      urlRevelada = false;
+      el('c-revelar-aviso').textContent = '';
+      b.textContent = 'Mostrar endereço completo';
+      return carregar();
+    }
+
+    b.disabled = true;
+    GI.chamarPortal('/config/url-completa').then(function (r) {
+      b.disabled = false;
+      if (!r || !r.definida) {
+        el('c-revelar-aviso').textContent = 'nada configurado ainda';
+        return;
+      }
+      urlRevelada = true;
+      el('c-atual').textContent = r.url;
+      el('c-atual').style.color = 'var(--ext-color-warning,#e65100)';
+      el('c-revelar-aviso').textContent = 'endereço completo, com a credencial — não cole em lugar público';
+      b.textContent = 'Ocultar';
+      GI.ajustarAltura();
+    }).catch(function (e) {
+      b.disabled = false;
+      el('c-revelar-aviso').textContent = 'não consegui ler: ' + (e.message || e);
+    });
+  }
+
   function carregar() {
     return GI.chamarPortal('/config').then(function (r) {
       el('c-atual').textContent = r.urlFeed.definida ? r.urlFeed.mascarada : '(nenhum endereço configurado)';
+      el('c-atual').style.color = '';
       el('c-origem').textContent =
         r.urlFeed.origem === 'tela'
           ? 'cadastrado aqui' + (r.urlFeed.atualizado_por ? ' por ' + r.urlFeed.atualizado_por : '') +
@@ -129,6 +233,7 @@
             ? 'vem da configuração do servidor — trocar aqui passa a valer sobre ela'
             : 'nada configurado';
       desenharEstado(r);
+      desenharRodadas(r);
       GI.ajustarAltura();
     });
   }
@@ -201,6 +306,7 @@
 
     el('gi-painel').style.display = 'block';
     el('b-testar').addEventListener('click', testar);
+    el('b-revelar').addEventListener('click', revelar);
     el('b-salvar').addEventListener('click', salvar);
     // Mexeu no campo depois de testar: o salvar volta a travar.
     el('c-url').addEventListener('input', function () {
