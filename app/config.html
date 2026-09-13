@@ -21,6 +21,10 @@
     </div>
     <div id="c-estado"></div>
     <div id="c-rodadas"></div>
+    <div class="gi-rodape" style="margin-top:12px">
+      <button class="btn" id="b-agora" type="button">Atualizar agora</button>
+      <span class="gi-pequeno" id="c-agora"></span>
+    </div>
   </div>
   <!-- ---------------------------------------------------------------- URL -->
   <div class="gi-cartao">
@@ -187,6 +191,41 @@
     alvo.innerHTML = html;
   }
 
+  /* "Atualizar agora": dispara no portal a mesma rodada que o serviço faz de
+     6 em 6 horas. É demorado de propósito — a resposta só volta quando a carga
+     termina — então o botão trava enquanto isso e diz o que está acontecendo.
+     Sem esse aviso, 30 segundos de silêncio parecem tela quebrada e o operador
+     clica de novo. */
+  function atualizarAgora() {
+    var b = el('b-agora');
+    var aviso = el('c-agora');
+
+    b.disabled = true;
+    aviso.style.color = '';
+    aviso.textContent = 'baixando o feed e atualizando o catálogo… isso leva alguns segundos';
+
+    GI.chamarPortal('/config/sincronizar', { corpo: {} }).then(function (r) {
+      b.disabled = false;
+      if (r && r.ok) {
+        aviso.style.color = 'var(--ext-color-success,#2e7d32)';
+        aviso.textContent = '✓ ' + r.total + ' imóveis no catálogo · +' + r.criados +
+          ' novos · −' + r.excluidos + ' saíram · ' + Number(r.segundos || 0).toFixed(1) + 's';
+        GI.aviso('Catálogo atualizado.', 'success');
+      } else {
+        // Banda de sanidade e feed fora do ar caem aqui: não é falha da tela,
+        // é o motivo pelo qual a carga não entrou — e o espelho anterior segue.
+        aviso.style.color = 'var(--ext-color-error,#c62828)';
+        aviso.textContent = '✗ ' + ((r && r.detalhe) || 'não consegui atualizar');
+      }
+      return carregar();
+    }).catch(function (e) {
+      b.disabled = false;
+      aviso.style.color = 'var(--ext-color-error,#c62828)';
+      aviso.textContent = '✗ ' + (e.message || e);
+      GI.ajustarAltura();
+    });
+  }
+
   /* A URL vive mascarada porque leva credencial na query. Revelar é um clique,
      e o pedido vai ao portal na hora — a URL inteira não fica pendurada na tela
      desde a abertura só para o caso de alguém querer ver. */
@@ -307,6 +346,7 @@
     el('gi-painel').style.display = 'block';
     el('b-testar').addEventListener('click', testar);
     el('b-revelar').addEventListener('click', revelar);
+    el('b-agora').addEventListener('click', atualizarAgora);
     el('b-salvar').addEventListener('click', salvar);
     // Mexeu no campo depois de testar: o salvar volta a travar.
     el('c-url').addEventListener('input', function () {
