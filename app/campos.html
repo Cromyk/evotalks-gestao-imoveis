@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<link rel="stylesheet" href="estilo.css?v=0.12.1">
+<link rel="stylesheet" href="estilo.css?v=0.13.0">
 
 <div class="gi-topo">
   <div>
@@ -55,12 +55,12 @@
 
 <p class="gi-nota">
   <strong>Desativar esconde; apagar leva junto o que foi preenchido em todos os imóveis.</strong>
-  Por isso o botão de apagar só aparece em campo que ninguém usou ainda — é a mesma regra do portal.
+  O botão de apagar avisa quantos imóveis perdem o dado antes de confirmar.
   A recorrência aqui é só a sugestão inicial: quem lança em cada imóvel pode trocar (IPTU anual num,
   parcelado em outro).
 </p>
 
-<script src="comum.js?v=0.12.1"></script>
+<script src="comum.js?v=0.13.0"></script>
 <script>
 (function () {
   'use strict';
@@ -113,7 +113,7 @@
         '<td class="gi-direita gi-nowrap">' +
           '<button type="button" class="btn btn-slim" data-renomear="' + c.id + '">renomear</button> ' +
           '<button type="button" class="btn btn-slim" data-alternar="' + c.id + '">' + (inativo ? 'reativar' : 'desativar') + '</button> ' +
-          (n === 0 ? '<button type="button" class="btn btn-slim btn-perigo" data-apagar="' + c.id + '">apagar</button>' : '') +
+          '<button type="button" class="btn btn-slim btn-perigo" data-apagar="' + c.id + '">apagar</button>' +
         '</td>' +
       '</tr>';
     }).join('');
@@ -187,19 +187,14 @@
     var campo = campos.filter(function (c) { return c.id === id; })[0];
     if (!campo) return;
     var atual = campo.nome;
-    omni.forms.openDynamic({
-      title: 'Renomear campo',
-      fields: [{ id: 'nome', label: 'Nome do campo', type: 1, required: true, value: atual }]
-    }).then(function (r) {
-      var novo = r && r.data ? String(r.data.nome || '').trim() : '';
-      if (!novo || novo === atual) return;
+    GI.pedirTexto({
+      titulo: 'Renomear campo', rotulo: 'Nome do campo', valor: atual, rotuloOk: 'Atualizar'
+    }).then(function (novo) {
+      if (!novo || novo === atual) return null;
       campo.nome = novo;
       if (GI.modo === 'portal') return aplicar(GI.campoAtualizar(campo));
       return persistir();
-    }).catch(function () {
-      /* formulário dinâmico indisponível: caminho simples, sem prompt bloqueante */
-      GI.aviso('Renomear indisponível nesta instância — apague e crie de novo enquanto o campo não estiver em uso.', 'info');
-    });
+    }).catch(GI.erroFatal);
   }
 
   function alternar(id) {
@@ -210,24 +205,30 @@
     persistir();
   }
 
+  /* Apagar existe para campo em uso também. Antes o botão sumia quando havia
+     lançamento — e quem queria apagar ficava sem saída nenhuma na tela, sem
+     nem saber por quê. O aviso agora diz o tamanho do estrago e oferece o
+     caminho mais brando (desativar), mas a decisão é de quem está olhando. */
   function apagar(id) {
     var campo = campos.filter(function (c) { return c.id === id; })[0];
     if (!campo) return;
-    if (usos(id) > 0) { GI.aviso('Esse campo está em uso — desative em vez de apagar.', 'error'); return; }
+    var n = usos(id);
 
-    Promise.resolve(omni.ui.confirm({
-      title: 'Apagar campo',
-      message: 'Apagar "' + campo.nome + '"? Ele não está em uso em nenhum imóvel.'
-    })).then(function (ok) {
-      if (ok === false) return;
+    GI.confirmar({
+      titulo: 'Apagar campo',
+      mensagem: n
+        ? 'Apagar "' + campo.nome + '"? Ele está preenchido em ' + n + ' imóve' + (n > 1 ? 'is' : 'l') + '.'
+        : 'Apagar "' + campo.nome + '"? Ele não está em uso em nenhum imóvel.',
+      detalhe: n
+        ? 'Os valores lançados nele somem de todos os imóveis e a assistente de IA para de responder essa informação. O histórico continua guardando o que existiu. Para só tirar da tela sem perder nada, use Desativar.'
+        : 'Pode ser recriado depois.',
+      rotuloOk: 'Apagar', perigo: true
+    }).then(function (ok) {
+      if (!ok) return null;
       if (GI.modo === 'portal') return aplicar(GI.campoApagar(id));
       campos = campos.filter(function (c) { return c.id !== id; });
       return persistir();
-    }).catch(function () {
-      if (GI.modo === 'portal') return aplicar(GI.campoApagar(id));
-      campos = campos.filter(function (c) { return c.id !== id; });
-      persistir();
-    });
+    }).catch(GI.erroFatal);
   }
 
   function atualizarFormaDoFormulario() {

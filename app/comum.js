@@ -238,6 +238,24 @@
     if (GI.modo === 'portal-fora') return exigePortal();
     return ler(CHAVES.valores, {});
   };
+
+  /* Mapa código → quantos campos preenchidos, para a LISTA saber quem está
+     pendente sem abrir imóvel por imóvel. No modo portal isto é uma consulta
+     só; antes dela a lista pintava tudo de pendente, porque `GI.valores()`
+     devolve vazio aqui e só os imóveis abertos na sessão entravam no estado. */
+  GI.preenchidos = function () {
+    if (GI.modo === 'portal') {
+      return chamar('/preenchidos')
+        .then(function (r) { return (r && r.preenchidos) || {}; })
+        .catch(function () { return {}; });   // portal antigo, sem a rota: some o verde, não a tela
+    }
+    if (GI.modo === 'portal-fora') return exigePortal();
+    return ler(CHAVES.valores, {}).then(function (mapa) {
+      var saida = {};
+      Object.keys(mapa).forEach(function (c) { saida[c] = Object.keys(mapa[c] || {}).length; });
+      return saida;
+    });
+  };
   GI.salvarValores = function (mapa) {
     if (GI.modo === 'portal') return Promise.resolve();
     if (GI.modo === 'portal-fora') return exigePortal();
@@ -610,6 +628,122 @@
   GI.paraNumero = function (texto) {
     if (texto === '' || texto === null || texto === undefined) return '';
     return Number(String(texto).trim().replace(/\./g, '').replace(',', '.'));
+  };
+
+  /* ------------------------------------------------------------------ modal
+
+     `omni.ui.confirm` NÃO existe no contêiner da extensão: a chamada estourava
+     TypeError de forma síncrona, antes de virar promise, então o `.catch` do
+     código nem rodava — o clique em "apagar" simplesmente não fazia nada. Daí
+     o diálogo ser nosso, no formato dos modais da plataforma.
+
+     Não é overlay flutuante de propósito. A altura do contêiner acompanha o
+     conteúdo (`omni.ui.resize`), então um `position: fixed` apareceria preso ao
+     topo do documento — fora da vista de quem rolou a lista. O modal esconde o
+     conteúdo da tela enquanto está aberto: o efeito é o mesmo e ele sempre
+     nasce onde a pessoa está olhando. */
+
+  var modaisAbertos = 0;
+
+  GI.modal = function (op) {
+    op = op || {};
+    return new Promise(function (resolve) {
+      var fundo = document.createElement('div');
+      fundo.className = 'gi-modal-fundo';
+      fundo.innerHTML =
+        '<div class="gi-modal" role="dialog" aria-modal="true"' +
+            (op.largura ? ' style="max-width:' + Number(op.largura) + 'px"' : '') + '>' +
+          '<div class="gi-modal-topo">' +
+            '<h2>' + GI.escapar(op.titulo || '') + '</h2>' +
+            '<button type="button" class="gi-modal-x" aria-label="Fechar">&times;</button>' +
+          '</div>' +
+          '<div class="gi-modal-corpo"></div>' +
+          '<div class="gi-modal-rodape">' +
+            '<span class="gi-modal-recado gi-pequeno"></span>' +
+            '<button type="button" class="btn btn-texto" data-cancelar>' +
+              GI.escapar(op.rotuloCancelar || 'Cancelar') + '</button>' +
+            '<button type="button" class="btn ' + (op.perigo ? 'btn-perigo-forte' : 'btn-sucesso') +
+              '" data-ok>' + GI.escapar(op.rotuloOk || 'Atualizar') + '</button>' +
+          '</div>' +
+        '</div>';
+
+      var caixa = fundo.querySelector('.gi-modal-corpo');
+      if (typeof op.corpo === 'string') caixa.innerHTML = op.corpo;
+      else if (op.corpo) caixa.appendChild(op.corpo);
+
+      var recado = fundo.querySelector('.gi-modal-recado');
+      var botaoOk = fundo.querySelector('[data-ok]');
+
+      function fechar(valor) {
+        document.removeEventListener('keydown', naTecla);
+        if (fundo.parentNode) fundo.parentNode.removeChild(fundo);
+        modaisAbertos = Math.max(0, modaisAbertos - 1);
+        if (!modaisAbertos) document.body.classList.remove('gi-com-modal');
+        GI.ajustarAltura();
+        resolve(valor);
+      }
+      function naTecla(e) { if (e.key === 'Escape') fechar(null); }
+
+      function confirmar() {
+        if (!op.aoConfirmar) { fechar(true); return; }
+        botaoOk.disabled = true;
+        recado.textContent = '';
+        Promise.resolve()
+          .then(function () { return op.aoConfirmar(caixa); })
+          .then(function (r) { fechar(r === undefined ? true : r); })
+          .catch(function (e) {
+            botaoOk.disabled = false;
+            recado.className = 'gi-modal-recado gi-pequeno gi-modal-recado-erro';
+            recado.textContent = e && e.message ? e.message : String(e);
+            GI.ajustarAltura();
+          });
+      }
+
+      fundo.querySelector('[data-cancelar]').addEventListener('click', function () { fechar(null); });
+      fundo.querySelector('.gi-modal-x').addEventListener('click', function () { fechar(null); });
+      botaoOk.addEventListener('click', confirmar);
+      document.addEventListener('keydown', naTecla);
+
+      document.body.appendChild(fundo);
+      document.body.classList.add('gi-com-modal');
+      modaisAbertos++;
+      GI.ajustarAltura();
+
+      if (op.aoAbrir) op.aoAbrir(caixa);
+      var primeiro = caixa.querySelector('input, select, textarea');
+      if (primeiro) { try { primeiro.focus(); } catch (e) { /* sem foco, tudo bem */ } }
+    });
+  };
+
+  /** Sim/não. Resolve `true` só no botão de confirmar. */
+  GI.confirmar = function (op) {
+    op = op || {};
+    return GI.modal({
+      titulo: op.titulo || 'Confirmar',
+      corpo: '<p class="gi-modal-texto">' + GI.escapar(op.mensagem || '') + '</p>' +
+        (op.detalhe ? '<p class="gi-modal-texto gi-mudo gi-pequeno">' + GI.escapar(op.detalhe) + '</p>' : ''),
+      rotuloOk: op.rotuloOk || 'Confirmar',
+      perigo: op.perigo,
+      largura: 480
+    }).then(function (r) { return r === true; });
+  };
+
+  /** Uma linha de texto. Resolve o texto, ou `null` se cancelaram. */
+  GI.pedirTexto = function (op) {
+    op = op || {};
+    var id = 'gi-pedir-' + Date.now();
+    return GI.modal({
+      titulo: op.titulo || '',
+      corpo: '<div class="gi-campo-caixa"><label for="' + id + '">' + GI.escapar(op.rotulo || '') + '</label>' +
+        '<input id="' + id + '" type="text" value="' + GI.escapar(op.valor || '') + '"></div>',
+      rotuloOk: op.rotuloOk || 'Salvar',
+      largura: 480,
+      aoConfirmar: function (caixa) {
+        var v = String(caixa.querySelector('input').value || '').trim();
+        if (!v) throw new Error('Não pode ficar vazio.');
+        return v;
+      }
+    }).then(function (r) { return (typeof r === 'string') ? r : null; });
   };
 
   /* -------------------------------------------------------------- navegação */

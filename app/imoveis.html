@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<link rel="stylesheet" href="estilo.css?v=0.12.1">
+<link rel="stylesheet" href="estilo.css?v=0.13.0">
 
 <div class="gi-topo">
   <div>
@@ -36,11 +36,6 @@
     <button class="btn" id="b-limpar" type="button">Limpar</button>
   </div>
 
-  <div class="gi-legenda" style="margin-bottom:10px">
-    <span><span class="gi-ponto gi-ponto-pendente"></span> Pendente</span>
-    <span><span class="gi-ponto gi-ponto-ok"></span> Verificado</span>
-  </div>
-
   <div class="gi-tabela-rolagem">
     <table>
       <thead>
@@ -49,8 +44,8 @@
           <th>Imóvel</th>
           <th style="width:150px">Bairro</th>
           <th style="width:120px" class="gi-direita">Valor</th>
-          <th style="width:130px">Preenchido</th>
-          <th style="width:130px" class="gi-direita">Funções</th>
+          <th style="width:120px">Preenchido</th>
+          <th style="width:230px" class="gi-direita">Funções</th>
         </tr>
       </thead>
       <tbody id="gi-corpo">
@@ -67,35 +62,19 @@
   </div>
 </section>
 
-<!-- ----------------------------------------------------------------- detalhe -->
-<section id="gi-detalhe" style="display:none">
-  <button class="btn btn-slim" id="b-voltar" type="button">&larr; voltar à lista</button>
-  <div class="gi-cartao" style="margin-top:10px">
-    <div id="gi-cabecalho-imovel"></div>
-  </div>
-  <div class="gi-cartao">
-    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px">
-      <strong style="font-size:14px">Informações adicionais</strong>
-      <span class="gi-ajuda">não aparecem no site — vão só para quem atende</span>
-    </div>
-    <div class="gi-grade-campos" id="gi-form-campos"></div>
-    <div class="gi-rodape">
-      <button class="btn btn-sucesso" id="b-salvar" type="button">Salvar</button>
-      <span class="gi-pequeno gi-mudo" id="gi-salvo"></span>
-    </div>
-  </div>
-</section>
-
 <p class="gi-nota">
   <span id="gi-modo">verificando onde os dados são gravados…</span>
 </p>
 
-<script src="comum.js?v=0.12.1"></script>
+<script src="comum.js?v=0.13.0"></script>
 <script>
 (function () {
   'use strict';
 
-  var estado = { pagina: 1, porPagina: 25, termo: '', filtroEstado: '', itens: [], campos: [], valores: {} };
+  var estado = {
+    pagina: 1, porPagina: 25, termo: '', filtroEstado: '',
+    itens: [], campos: [], valores: {}, preenchidos: {}
+  };
 
   var el = function (id) { return document.getElementById(id); };
 
@@ -108,16 +87,20 @@
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
 
-  /* Bolinha de estado: amarela enquanto ninguém preencheu nada, verde quando o
-     imóvel já tem informação — a mesma leitura da legenda acima da tabela. */
-  function bolinha(codigo) {
+  /* O estado vem com o nome junto, como os chips de tipo da plataforma. */
+  function selo(codigo) {
     var ok = quantosPreenchidos(codigo) > 0;
-    return '<span class="gi-ponto ' + (ok ? 'gi-ponto-ok' : 'gi-ponto-pendente') + '" ' +
-      'title="' + (ok ? 'Verificado' : 'Pendente') + '" aria-label="' + (ok ? 'Verificado' : 'Pendente') + '"></span>';
+    return '<span class="gi-estado ' + (ok ? 'gi-estado-ok' : 'gi-estado-pendente') + '">' +
+      '<span class="gi-ponto ' + (ok ? 'gi-ponto-ok' : 'gi-ponto-pendente') + '"></span>' +
+      (ok ? 'Verificado' : 'Pendente') + '</span>';
   }
   function quantosPreenchidos(codigo) {
-    var v = estado.valores[codigo];
-    return v ? Object.keys(v).length : 0;
+    if (estado.valores[codigo]) return Object.keys(estado.valores[codigo]).length;
+    return Number(estado.preenchidos[codigo] || 0);
+  }
+  function anotarPreenchidos(codigo, quantos) {
+    if (quantos) estado.preenchidos[codigo] = quantos;
+    else delete estado.preenchidos[codigo];
   }
 
   /* ------------------------------------------------------------------ lista */
@@ -154,8 +137,8 @@
         '<td>' + (n ? '<span class="gi-chip">' + n + ' campo' + (n > 1 ? 's' : '') + '</span>' : '<span class="gi-mudo gi-pequeno">nada ainda</span>') + '</td>' +
         '<td>' +
           '<div class="gi-acoes">' +
-            bolinha(p.internalcode) +
-            '<button type="button" class="btn btn-slim btn-icone" title="Abrir" aria-label="Abrir" ' +
+            selo(p.internalcode) +
+            '<button type="button" class="btn btn-slim btn-icone" title="Editar" aria-label="Editar" ' +
               'data-abrir="' + codigo + '">' + ICONE_ABRIR + '</button>' +
             '<button type="button" class="btn btn-slim btn-icone btn-perigo" ' +
               'title="' + (n ? 'Excluir as informações preenchidas' : 'Nada preenchido para excluir') + '" ' +
@@ -179,52 +162,38 @@
      imóvel em si vem do catálogo do Imogestão e não se apaga por esta tela.
      Some da resposta da IA, então pede confirmação e vai para o histórico. */
   function excluirImovel(codigo) {
-    var lancados = estado.valores[codigo];
-    if (!lancados || !Object.keys(lancados).length) return;
+    var quantos = quantosPreenchidos(codigo);
+    if (!quantos) return;
 
-    var porId = {};
-    estado.campos.forEach(function (c) { porId[c.id] = c; });
-    var quantos = Object.keys(lancados).length;
-
-    function apagar() {
-      var eventos = Object.keys(lancados).map(function (id) {
-        return { codigo: codigo, campo: porId[id] ? porId[id].nome : id,
-                 acao: 'removeu', de: GI.valorLegivel(porId[id], lancados[id]), para: '' };
+    GI.confirmar({
+      titulo: 'Excluir informações do imóvel',
+      mensagem: 'Apagar ' + quantos + ' campo' + (quantos > 1 ? 's' : '') + ' preenchido' +
+        (quantos > 1 ? 's' : '') + ' do imóvel ' + GI.codigoCurto(codigo) + '?',
+      detalhe: 'A assistente de IA deixa de responder essas informações ao cliente. O histórico guarda o que foi removido.',
+      rotuloOk: 'Excluir', perigo: true
+    }).then(function (ok) {
+      if (!ok) return null;
+      return GI.valoresDoImovel(codigo).then(function (lancados) {
+        var porId = {};
+        estado.campos.forEach(function (c) { porId[c.id] = c; });
+        var eventos = Object.keys(lancados).map(function (id) {
+          return { codigo: codigo, campo: porId[id] ? porId[id].nome : id,
+                   acao: 'removeu', de: GI.valorLegivel(porId[id], lancados[id]), para: '' };
+        });
+        return GI.apagarValoresDoImovel(codigo, estado.campos)
+          .then(function () { return eventos.length ? GI.registrarHistorico(eventos) : null; })
+          .then(function () {
+            delete estado.valores[codigo];
+            anotarPreenchidos(codigo, 0);
+            GI.aviso('Informações do imóvel ' + GI.codigoCurto(codigo) + ' excluídas.', 'success');
+            desenharLista();
+          });
       });
-      delete estado.valores[codigo];
-      return GI.apagarValoresDoImovel(codigo, estado.campos)
-        .then(function () { return GI.registrarHistorico(eventos); })
-        .then(function () {
-          GI.aviso('Informações do imóvel ' + GI.codigoCurto(codigo) + ' excluídas.', 'success');
-          desenharLista();
-        })
-        .catch(function (e) { estado.valores[codigo] = lancados; GI.erroFatal(e); });
-    }
-
-    Promise.resolve(omni.ui.confirm({
-      title: 'Excluir informações do imóvel',
-      message: 'Apagar ' + quantos + ' campo' + (quantos > 1 ? 's' : '') + ' preenchido' +
-        (quantos > 1 ? 's' : '') + ' do imóvel ' + GI.codigoCurto(codigo) + '? ' +
-        'A assistente de IA deixa de responder essas informações ao cliente.'
-    })).then(function (ok) {
-      if (ok === false) return;
-      return apagar();
-    }).catch(function () {
-      /* Sem diálogo de confirmação nesta instância: confirma no segundo clique.
-         Apagar direto, em silêncio, seria o pior caminho dos três. */
-      if (confirmando.codigo === codigo && Date.now() - confirmando.quando < 6000) {
-        confirmando = { codigo: '', quando: 0 };
-        return apagar();
-      }
-      confirmando = { codigo: codigo, quando: Date.now() };
-      GI.aviso('Clique de novo em excluir para confirmar — ' + quantos + ' campo' +
-        (quantos > 1 ? 's serão apagados' : ' será apagado') + '.', 'info');
-    });
+    }).catch(GI.erroFatal);
   }
-  var confirmando = { codigo: '', quando: 0 };
 
   function carregar() {
-    el('gi-corpo').innerHTML = '<tr><td colspan="7" class="gi-mudo">buscando…</td></tr>';
+    el('gi-corpo').innerHTML = '<tr><td colspan="6" class="gi-mudo">buscando…</td></tr>';
     return GI.buscarImoveis({
       termo: estado.termo, pagina: estado.pagina, porPagina: estado.porPagina
     }).then(function (r) {
@@ -235,55 +204,60 @@
       el('b-anterior').disabled = estado.pagina <= 1;
       el('b-proxima').disabled = r.itens.length < estado.porPagina;
       desenharLista();
-      return GI.registrarConsulta({
-        termo: estado.termo, estado: estado.filtroEstado, pagina: estado.pagina,
-        resultados: r.itens.length, ms: r.ms, origem: GI.estrategiaCatalogo
-      });
     });
   }
 
-  /* ---------------------------------------------------------------- detalhe */
-
-  var imovelAberto = null;
+  /* ------------------------------------------------------ edição num modal */
 
   function abrirImovel(codigo) {
-    GI.buscarImovel(codigo).then(function (p) {
-      imovelAberto = p;
-      var cat = GI.partesCategoria(p.category);
-      el('gi-cabecalho-imovel').innerHTML =
-        '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:baseline">' +
-          '<strong style="font-size:15px">' + GI.escapar(GI.codigoCurto(p.internalcode)) + '</strong>' +
-          '<span>' + GI.escapar(p.name) + '</span>' +
-        '</div>' +
-        '<div class="gi-ajuda" style="margin-top:5px">' +
-          GI.escapar(cat.tipo) + (cat.bairro ? ' · ' + GI.escapar(cat.bairro) : '') +
-          (cat.cidade ? ' · ' + GI.escapar(cat.cidade) : '') +
-          ' · ' + GI.dinheiro(p.value) +
-          ' · código interno ' + GI.escapar(p.internalcode) +
-        '</div>';
+    var imovel = null;
 
-      return GI.valoresDoImovel(p.internalcode).then(function (lancados) {
-        estado.valores[p.internalcode] = lancados;
-        desenharFormulario(p.internalcode);
-        el('gi-lista').style.display = 'none';
-        el('gi-detalhe').style.display = 'block';
-        el('gi-salvo').textContent = '';
-        GI.ajustarAltura();
+    GI.buscarImovel(codigo).then(function (p) {
+      imovel = p;
+      return GI.valoresDoImovel(codigo);
+    }).then(function (lancados) {
+      estado.valores[codigo] = lancados;
+      var cat = GI.partesCategoria(imovel.category);
+
+      var corpo =
+        '<div class="gi-modal-imovel">' +
+          '<div class="gi-modal-imovel-titulo">' + GI.escapar(imovel.name) + '</div>' +
+          '<div class="gi-ajuda">' +
+            GI.escapar(GI.codigoCurto(imovel.internalcode)) + ' · ' + GI.escapar(cat.tipo) +
+            (cat.bairro ? ' · ' + GI.escapar(cat.bairro) : '') +
+            (cat.cidade ? ' · ' + GI.escapar(cat.cidade) : '') +
+            ' · ' + GI.dinheiro(imovel.value) +
+            ' · código interno ' + GI.escapar(imovel.internalcode) +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:16px 0 8px">' +
+          '<strong style="font-size:13.5px">Informações adicionais</strong>' +
+          '<span class="gi-ajuda">não aparecem no site — vão só para quem atende</span>' +
+        '</div>' +
+        '<div class="gi-grade-campos" id="gi-form-campos"></div>';
+
+      return GI.modal({
+        titulo: 'Editar imóvel ' + GI.codigoCurto(codigo),
+        corpo: corpo,
+        rotuloOk: 'Atualizar',
+        aoAbrir: function () { desenharFormulario(codigo); },
+        aoConfirmar: function () { return salvar(codigo); }
       });
+    }).then(function () {
+      desenharLista();
     }).catch(GI.erroFatal);
   }
 
   function desenharFormulario(codigo) {
     var ativos = estado.campos.filter(function (c) { return c.ativo !== false; });
     var caixa = el('gi-form-campos');
+    if (!caixa) return;
 
     if (!ativos.length) {
       caixa.innerHTML = '<div class="gi-vazio">Nenhum campo cadastrado ainda.<br>' +
         '<span class="gi-pequeno">Crie os campos na tela <strong>Campos</strong> — eles valem para todos os imóveis.</span></div>';
-      el('b-salvar').disabled = true;
       return;
     }
-    el('b-salvar').disabled = false;
 
     var lancados = estado.valores[codigo] || {};
 
@@ -311,20 +285,20 @@
       }
 
       var recorrencia = (c.tipo === 'valor')
-        ? '<div class="gi-campo"><label>Recorrência</label><select data-recorrencia="' + c.id + '">' +
+        ? '<div class="gi-campo-caixa"><label>Recorrência</label><select data-recorrencia="' + c.id + '">' +
             GI.RECORRENCIAS.map(function (r) {
               var sel = (l.recorrencia || c.recorrenciaPadrao || 'unico') === r.id ? ' selected' : '';
               return '<option value="' + r.id + '"' + sel + '>' + r.nome + '</option>';
             }).join('') + '</select></div>'
-        : '<div class="gi-campo"><label>&nbsp;</label><span class="gi-ajuda">—</span></div>';
+        : '<div></div>';
 
       return '<div class="gi-linha-campo">' +
         '<div><div class="gi-rotulo-campo">' + GI.escapar(c.nome) + '</div>' +
           '<div class="gi-ajuda">' + GI.escapar(GI.nomeTipo(c.tipo)) + '</div>' +
           '<div class="gi-previa" data-previa="' + c.id + '"></div></div>' +
-        '<div class="gi-campo"><label>Valor</label>' + entrada + '</div>' +
+        '<div class="gi-campo-caixa"><label>Valor</label>' + entrada + '</div>' +
         recorrencia +
-        '<div class="gi-campo"><label>Observação</label>' +
+        '<div class="gi-campo-caixa"><label>Observação</label>' +
           '<input data-obs="' + c.id + '" type="text" value="' + GI.escapar(l.obs || '') + '" placeholder="opcional"></div>' +
       '</div>';
     }).join('');
@@ -370,14 +344,13 @@
     GI.ajustarAltura();
   }
 
-  function salvar() {
-    if (!imovelAberto) return;
-    var codigo = imovelAberto.internalcode;
+  /* Devolve promise: o modal só fecha quando a gravação volta, e uma recusa
+     (número inválido, portal fora) mantém a tela aberta com o que foi digitado. */
+  function salvar(codigo) {
     var novo = lerFormulario();
 
     if (novo['@erro']) {
-      GI.aviso('O campo "' + novo['@erro'] + '" não é um número válido — nada foi gravado.', 'error');
-      return;
+      throw new Error('O campo "' + novo['@erro'] + '" não é um número válido — nada foi gravado.');
     }
     var antigo = estado.valores[codigo] || {};
     var eventos = [];
@@ -400,21 +373,20 @@
     });
 
     if (!eventos.length) {
-      el('gi-salvo').textContent = 'nada mudou — nenhuma linha gravada';
-      return;
+      GI.aviso('Nada mudou — nenhuma linha gravada.', 'info');
+      return Promise.resolve(true);
     }
 
-    if (Object.keys(novo).length) estado.valores[codigo] = novo;
-    else delete estado.valores[codigo];
-
-    GI.salvarValoresDoImovel(codigo, novo, estado.campos)
+    return GI.salvarValoresDoImovel(codigo, novo, estado.campos)
       .then(function () { return GI.registrarHistorico(eventos); })
       .then(function () {
-        el('gi-salvo').textContent = eventos.length + ' alteração' + (eventos.length > 1 ? 'ões' : '') + ' gravada' + (eventos.length > 1 ? 's' : '');
-        GI.aviso('Imóvel ' + GI.codigoCurto(codigo) + ' salvo.', 'success');
-        desenharLista();
-      })
-      .catch(GI.erroFatal);
+        if (Object.keys(novo).length) estado.valores[codigo] = novo;
+        else delete estado.valores[codigo];
+        anotarPreenchidos(codigo, Object.keys(novo).length);
+        GI.aviso(eventos.length + (eventos.length > 1 ? ' alterações gravadas' : ' alteração gravada') +
+          ' no imóvel ' + GI.codigoCurto(codigo) + '.', 'success');
+        return true;
+      });
   }
 
   /* ------------------------------------------------------------------ ligar */
@@ -447,20 +419,15 @@
     el('b-proxima').addEventListener('click', function () {
       estado.pagina++; carregar().catch(GI.erroFatal);
     });
-    el('b-voltar').addEventListener('click', function () {
-      el('gi-detalhe').style.display = 'none';
-      el('gi-lista').style.display = 'block';
-      imovelAberto = null;
-      GI.ajustarAltura();
-    });
-    el('b-salvar').addEventListener('click', salvar);
 
-    return Promise.all([GI.campos(), GI.valores()]).then(function (r) {
+    return Promise.all([GI.campos(), GI.valores(), GI.preenchidos()]).then(function (r) {
       estado.campos = r[0];
       estado.valores = r[1];
+      estado.preenchidos = r[2];
       var ativos = estado.campos.filter(function (c) { return c.ativo !== false; }).length;
+      var comInfo = Object.keys(estado.preenchidos).length;
       el('gi-resumo').textContent = ativos + ' campo' + (ativos === 1 ? '' : 's') + ' em uso · ' +
-        Object.keys(estado.valores).length + ' imóve' + (Object.keys(estado.valores).length === 1 ? 'l' : 'is') + ' com informação preenchida';
+        comInfo + ' imóve' + (comInfo === 1 ? 'l' : 'is') + ' com informação preenchida';
       return carregar();
     });
   });

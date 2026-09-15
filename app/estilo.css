@@ -115,20 +115,76 @@ tbody tr:hover { background: var(--gi-acao-suave); }
 /* ----------------------------------------------- estado: pendente × ok */
 
 .gi-ponto {
-  display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
   vertical-align: middle; flex: 0 0 auto;
 }
 .gi-ponto-pendente { background: var(--gi-pendente); }
 .gi-ponto-ok       { background: var(--gi-ok); }
 
-/* A bolinha vive na coluna Funções, colada nos botões — e a legenda diz o que
-   cada cor significa, porque cor sozinha não informa ninguém. */
-.gi-acoes { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-.gi-legenda {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  font-size: 12px; color: var(--gi-mudo);
+/* Bolinha COM o nome ao lado, no formato dos chips de tipo da plataforma —
+   cor sozinha não informa ninguém, e a legenda separada obrigava a ir e voltar
+   com os olhos a cada linha. */
+.gi-estado {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font-size: 12px; padding: 4px 10px; border-radius: 20px;
 }
-.gi-legenda > span { display: inline-flex; align-items: center; gap: 6px; }
+.gi-estado-pendente { background: rgba(240, 180, 41, .16); color: #8a6100; }
+.gi-estado-ok       { background: rgba(34, 181, 115, .16); color: #10714a; }
+
+.gi-acoes { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+
+/* ------------------------------------------------------------------- modal */
+
+/* Enquanto o modal está aberto o resto da tela sai do caminho — ver a nota em
+   comum.js sobre por que não é um overlay flutuante. */
+body.gi-com-modal { padding: 0; background: rgba(20, 20, 20, .5); }
+body.gi-com-modal > *:not(.gi-modal-fundo) { display: none !important; }
+
+.gi-modal-fundo { padding: 26px 16px 40px; min-height: 100vh; }
+.gi-modal {
+  background: var(--gi-surface); border-radius: 10px; max-width: 900px; margin: 0 auto;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .28); overflow: hidden;
+}
+.gi-modal-topo {
+  display: flex; align-items: center; gap: 12px; padding: 18px 22px 12px;
+}
+.gi-modal-topo h2 { font-size: 16px; font-weight: 600; margin: 0; flex: 1; }
+.gi-modal-x {
+  border: 0; background: transparent; font-size: 22px; line-height: 1; cursor: pointer;
+  color: var(--gi-mudo); padding: 0 4px;
+}
+.gi-modal-x:hover { color: var(--gi-texto); }
+.gi-modal-corpo { padding: 4px 22px 20px; max-height: 70vh; overflow-y: auto; }
+.gi-modal-texto { margin: 6px 0; font-size: 13.5px; line-height: 1.55; }
+.gi-modal-rodape {
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  padding: 14px 22px; border-top: 1px solid var(--gi-borda);
+}
+.gi-modal-recado { flex: 1; color: var(--gi-mudo); }
+.gi-modal-recado-erro { color: var(--gi-erro); }
+
+.btn-texto { border-color: transparent; background: transparent; }
+.btn-texto:hover { background: var(--gi-acao-suave); }
+.btn-perigo-forte { background: var(--gi-erro); border-color: var(--gi-erro); color: #fff; }
+.btn-perigo-forte:hover { background: var(--gi-erro); opacity: .9; }
+
+/* Campo no formato da plataforma: rótulo pequeno dentro da caixa cinza, o
+   valor logo abaixo, sem borda desenhada até receber o foco. */
+.gi-campo-caixa {
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--gi-campo-bg); border-radius: var(--gi-raio-p);
+  padding: 7px 11px 8px; box-shadow: inset 0 0 0 1px transparent;
+}
+.gi-campo-caixa > label { font-size: 11px; color: var(--gi-mudo); }
+.gi-campo-caixa input, .gi-campo-caixa select, .gi-campo-caixa textarea {
+  background: transparent; border: 0; padding: 0; font-size: 13.5px; width: 100%;
+}
+.gi-campo-caixa input:focus, .gi-campo-caixa select:focus, .gi-campo-caixa textarea:focus {
+  background: transparent; border: 0; outline: none;
+}
+.gi-campo-caixa:focus-within { box-shadow: inset 0 0 0 1px var(--gi-acao); }
+.gi-campo-caixa:hover { box-shadow: inset 0 0 0 1px var(--gi-borda); }
+.gi-campo-caixa:focus-within:hover { box-shadow: inset 0 0 0 1px var(--gi-acao); }
 
 .gi-bolinha { font-size: 12px; }
 .gi-chip {
@@ -163,6 +219,12 @@ tbody tr:hover { background: var(--gi-acao-suave); }
   min-width: 28px; height: 28px; padding: 0 8px; border-radius: 999px;
   background: var(--gi-acao); color: var(--gi-acao-texto); font-size: 12px; font-weight: 500;
 }
+
+/* Cabeçalho do imóvel dentro do modal de edição. */
+.gi-modal-imovel {
+  background: var(--gi-campo-bg); border-radius: var(--gi-raio-p); padding: 12px 14px;
+}
+.gi-modal-imovel-titulo { font-size: 14px; font-weight: 500; line-height: 1.4; }
 
 /* ----------------------------------------------------------- form de campos */
 
