@@ -394,6 +394,20 @@
     return chamar('/valores/' + encodeURIComponent(codigo), { corpo: { entradas: entradas } });
   };
 
+  /* Zera TUDO o que foi lançado no imóvel — inclusive o que está em campo
+     desativado, que o salvamento normal nem enxerga. Deixar um lançamento
+     órfão vivo no banco é pior aqui: a tela diria "pendente" e a IA continuaria
+     respondendo a taxa antiga. */
+  GI.apagarValoresDoImovel = function (codigo, campos) {
+    var todos = (campos || []).map(function (c) {
+      var copia = {};
+      for (var k in c) { if (Object.prototype.hasOwnProperty.call(c, k)) copia[k] = c[k]; }
+      copia.ativo = true;
+      return copia;
+    });
+    return GI.salvarValoresDoImovel(codigo, {}, todos);
+  };
+
   /* A tela Consultas saiu na 0.3.0. O registro de buscas deixou de ter leitor, então deixou
      de ser gravado — dado que ninguém lê é só consumo do orçamento do storage. */
   GI.registrarConsulta = function () { return Promise.resolve(); };
