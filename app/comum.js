@@ -397,6 +397,18 @@
     } }).then(function (r) { return paraCamposTela(r.campos); });
   };
 
+  /* Recoloca os campos que a operação usa, sobrescrevendo quem tem o mesmo
+     rótulo. Só existe no modo portal: no modo local não há o que recolocar. */
+  GI.camposPadrao = function () {
+    if (GI.modo !== 'portal') {
+      return Promise.reject(new Error('Sem portal configurado — não há banco onde recolocar os campos.'));
+    }
+    return chamar('/campos/padrao', { corpo: {} }).then(function (r) {
+      return { criados: r.criados, atualizados: r.atualizados, total: r.total,
+               campos: paraCamposTela(r.campos) };
+    });
+  };
+
   GI.campoApagar = function (id) {
     return chamar('/campos/' + id + '/apagar', { corpo: {} })
       .then(function (r) { return paraCamposTela(r.campos); });

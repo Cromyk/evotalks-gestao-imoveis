@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<link rel="stylesheet" href="estilo.css?v=0.16.0">
+<link rel="stylesheet" href="estilo.css?v=0.17.0">
 
 <div class="gi-topo">
   <div>
@@ -57,6 +57,22 @@
       <span class="gi-pequeno" id="c-resultado"></span>
     </div>
   </div>
+
+  <!-- ------------------------------------------------------- campos padrão -->
+  <div class="gi-cartao">
+    <strong style="font-size:14px">Campos padrão</strong>
+    <p class="gi-ajuda" style="margin:6px 0 10px">
+      Recoloca os campos que a operação usa — IPTU, seguro incêndio, taxa de administração, taxa de
+      contrato, vagas extras, aceita pet, mobiliado e observação da administração. Campo com o
+      <strong>mesmo nome é sobrescrito</strong> (tipo, opções, recorrência) e reativado; o que foi
+      <strong>lançado nos imóveis não é apagado</strong>. Campo criado por vocês, com outro nome,
+      fica como está.
+    </p>
+    <div class="gi-rodape" style="margin-top:0">
+      <button class="btn" id="b-campos-padrao" type="button">Aplicar campos padrão</button>
+      <span class="gi-pequeno" id="c-campos-padrao"></span>
+    </div>
+  </div>
 </section>
 
 <section id="gi-negado" class="gi-vazio" style="display:none"></section>
@@ -68,7 +84,7 @@
   imóveis de verdade no endereço.
 </p>
 
-<script src="comum.js?v=0.16.0"></script>
+<script src="comum.js?v=0.17.0"></script>
 <script>
 (function () {
   'use strict';
@@ -329,6 +345,29 @@
     });
   }
 
+  function aplicarCamposPadrao() {
+    GI.confirmar({
+      titulo: 'Aplicar campos padrão',
+      mensagem: 'Recolocar os 8 campos padrão?',
+      detalhe: 'Campo com o mesmo nome é sobrescrito e reativado. O que já foi lançado nos imóveis não é apagado.',
+      rotuloOk: 'Aplicar'
+    }).then(function (ok) {
+      if (!ok) return null;
+      var botao = el('b-campos-padrao');
+      botao.disabled = true;
+      el('c-campos-padrao').textContent = 'aplicando…';
+      return GI.camposPadrao().then(function (r) {
+        el('c-campos-padrao').textContent =
+          r.criados + ' criado' + (r.criados === 1 ? '' : 's') + ' · ' +
+          r.atualizados + ' atualizado' + (r.atualizados === 1 ? '' : 's') + ' · veja em Campos';
+        GI.aviso('Campos padrão aplicados.', 'success');
+      }).catch(function (e) {
+        el('c-campos-padrao').textContent = '';
+        GI.aviso(e && e.message ? e.message : String(e), 'error');
+      }).then(function () { botao.disabled = false; GI.ajustarAltura(); });
+    }).catch(GI.erroFatal);
+  }
+
   GI.pronto(function () {
     el('gi-nav').innerHTML = GI.cabecalho('gi-config');
     GI.ligarNavegacao();
@@ -347,6 +386,7 @@
     el('b-testar').addEventListener('click', testar);
     el('b-revelar').addEventListener('click', revelar);
     el('b-agora').addEventListener('click', atualizarAgora);
+    el('b-campos-padrao').addEventListener('click', aplicarCamposPadrao);
     el('b-salvar').addEventListener('click', salvar);
     // Mexeu no campo depois de testar: o salvar volta a travar.
     el('c-url').addEventListener('input', function () {
