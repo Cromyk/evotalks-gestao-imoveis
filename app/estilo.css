@@ -41,7 +41,7 @@ h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
 
 .gi-nav { display: flex; gap: 6px; flex-wrap: wrap; }
 .gi-nav-item {
-  font: inherit; font-size: 13px; font-weight: 500; padding: 9px 18px;
+  font: inherit; font-size: 14px; font-weight: 500; padding: 11px 20px;
   border-radius: var(--gi-raio); border: 0; background: transparent;
   color: var(--gi-texto); cursor: pointer; line-height: 1.2;
 }
@@ -56,7 +56,7 @@ h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
 .gi-campo > label { font-size: 11px; color: var(--gi-mudo); }
 
 input, select, textarea {
-  font: inherit; font-size: 13px; padding: 9px 11px; border-radius: var(--gi-raio-p);
+  font: inherit; font-size: 14px; padding: 10px 12px; border-radius: var(--gi-raio-p);
   border: 1px solid transparent; background: var(--gi-campo-bg); color: var(--gi-texto);
 }
 input:hover, select:hover, textarea:hover { border-color: var(--gi-borda); }
@@ -69,7 +69,7 @@ textarea { resize: vertical; min-height: 36px; }
 /* ------------------------------------------------------------------- botões */
 
 .btn {
-  font: inherit; font-size: 13px; font-weight: 500; padding: 9px 16px;
+  font: inherit; font-size: 14px; font-weight: 500; padding: 11px 20px;
   border-radius: var(--gi-raio-p); border: 1px solid var(--gi-borda);
   background: var(--gi-surface); color: var(--gi-texto); cursor: pointer; line-height: 1.2;
 }
@@ -80,14 +80,14 @@ textarea { resize: vertical; min-height: 36px; }
 .btn-sucesso:hover { background: var(--gi-ok); opacity: .9; }
 .btn-perigo { color: var(--gi-erro); border-color: var(--gi-borda); }
 .btn-perigo:hover { background: rgba(229, 57, 53, .08); border-color: var(--gi-erro); }
-.btn-slim { padding: 6px 11px; font-size: 12px; }
+.btn-slim { padding: 8px 14px; font-size: 13px; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn:disabled:hover { background: var(--gi-surface); }
 
 /* Botão só de ícone da coluna Funções — quadrado, como nas telas padrão. */
 .btn-icone {
-  width: 30px; height: 30px; padding: 0; display: inline-flex;
-  align-items: center; justify-content: center; font-size: 14px; line-height: 1;
+  width: 36px; height: 36px; padding: 0; display: inline-flex;
+  align-items: center; justify-content: center; font-size: 15px; line-height: 1;
 }
 
 /* ------------------------------------------------------------------- tabela */
@@ -96,12 +96,12 @@ textarea { resize: vertical; min-height: 36px; }
   overflow-x: auto; background: var(--gi-surface);
   border-radius: var(--gi-raio); box-shadow: var(--gi-sombra);
 }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 th {
-  text-align: left; font-weight: 600; font-size: 12px; color: var(--gi-mudo);
-  padding: 13px 12px; border-bottom: 1px solid var(--gi-borda); white-space: nowrap;
+  text-align: left; font-weight: 600; font-size: 13px; color: var(--gi-mudo);
+  padding: 14px 12px; border-bottom: 1px solid var(--gi-borda); white-space: nowrap;
 }
-td { padding: 11px 12px; border-bottom: 1px solid var(--gi-borda); vertical-align: middle; }
+td { padding: 13px 12px; border-bottom: 1px solid var(--gi-borda); vertical-align: middle; }
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: var(--gi-acao-suave); }
 
@@ -115,7 +115,7 @@ tbody tr:hover { background: var(--gi-acao-suave); }
 /* ----------------------------------------------- estado: pendente × ok */
 
 .gi-ponto {
-  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%;
   vertical-align: middle; flex: 0 0 auto;
 }
 .gi-ponto-pendente { background: var(--gi-pendente); }
@@ -126,7 +126,7 @@ tbody tr:hover { background: var(--gi-acao-suave); }
    com os olhos a cada linha. */
 .gi-estado {
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
-  font-size: 12px; padding: 4px 10px; border-radius: 20px;
+  font-size: 12.5px; padding: 6px 12px; border-radius: 20px;
 }
 .gi-estado-pendente { background: rgba(240, 180, 41, .16); color: #8a6100; }
 .gi-estado-ok       { background: rgba(34, 181, 115, .16); color: #10714a; }
