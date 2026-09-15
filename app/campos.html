@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<link rel="stylesheet" href="estilo.css?v=0.13.0">
+<link rel="stylesheet" href="estilo.css?v=0.14.0">
 
 <div class="gi-topo">
   <div>
@@ -11,28 +11,9 @@
 
 <div class="gi-erro" id="gi-erro"></div>
 
-<div class="gi-cartao">
-  <strong style="font-size:14px">Novo campo</strong>
-  <div class="gi-barra" style="margin-top:10px;margin-bottom:0">
-    <div class="gi-campo" style="flex:1 1 200px">
-      <label for="n-nome">Nome</label>
-      <input id="n-nome" type="text" placeholder="ex.: IPTU, Taxa de lixo, Aceita pet">
-    </div>
-    <div class="gi-campo">
-      <label for="n-tipo">Tipo</label>
-      <select id="n-tipo"></select>
-    </div>
-    <div class="gi-campo" id="n-caixa-recorrencia">
-      <label for="n-recorrencia">Recorrência padrão</label>
-      <select id="n-recorrencia"></select>
-    </div>
-    <div class="gi-campo" id="n-caixa-opcoes" style="flex:1 1 220px;display:none">
-      <label for="n-opcoes">Opções (uma por vírgula)</label>
-      <input id="n-opcoes" type="text" placeholder="Sim até 10kg, Sim, Não">
-    </div>
-    <button class="btn btn-primario" id="b-criar" type="button">Adicionar</button>
-  </div>
-  <div class="gi-ajuda" id="n-ajuda" style="margin-top:8px"></div>
+<div class="gi-barra gi-barra-acoes">
+  <span class="gi-pequeno gi-mudo" id="gi-contagem"></span>
+  <button class="btn btn-primario" id="b-novo" type="button">+ Adicionar</button>
 </div>
 
 <div class="gi-tabela-rolagem">
@@ -41,10 +22,10 @@
       <tr>
         <th>Campo</th>
         <th style="width:150px">Tipo</th>
-        <th style="width:140px">Recorrência padrão</th>
+        <th style="width:150px">Recorrência padrão</th>
         <th style="width:110px">Em uso</th>
-        <th style="width:90px">Estado</th>
-        <th style="width:230px" class="gi-direita">Funções</th>
+        <th style="width:110px">Estado</th>
+        <th style="width:140px" class="gi-direita">Funções</th>
       </tr>
     </thead>
     <tbody id="gi-corpo"><tr><td colspan="6" class="gi-mudo">carregando…</td></tr></tbody>
@@ -55,12 +36,11 @@
 
 <p class="gi-nota">
   <strong>Desativar esconde; apagar leva junto o que foi preenchido em todos os imóveis.</strong>
-  O botão de apagar avisa quantos imóveis perdem o dado antes de confirmar.
-  A recorrência aqui é só a sugestão inicial: quem lança em cada imóvel pode trocar (IPTU anual num,
-  parcelado em outro).
+  O aviso de apagar diz quantos imóveis perdem o dado antes de confirmar. A recorrência aqui é só a
+  sugestão inicial: quem lança em cada imóvel pode trocar (IPTU anual num, parcelado em outro).
 </p>
 
-<script src="comum.js?v=0.13.0"></script>
+<script src="comum.js?v=0.14.0"></script>
 <script>
 (function () {
   'use strict';
@@ -69,9 +49,26 @@
   var valores = {};
   var el = function (id) { return document.getElementById(id); };
 
+  var I = {
+    editar: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    apagar: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>'
+  };
+
+  /* O id do campo vem NÚMERO do portal e volta TEXTO do atributo HTML, então a
+     comparação tem de ser por texto dos dois lados. Era isto que fazia
+     renomear, desativar e apagar não terem efeito nenhum: a busca não achava o
+     campo (12 === "12" é falso) e a função saía calada. */
+  function acharCampo(id) {
+    return campos.filter(function (c) { return String(c.id) === String(id); })[0] || null;
+  }
+
   function usos(idCampo) {
     if (GI.modo === 'portal') {
-      var c = campos.filter(function (x) { return x.id === idCampo; })[0];
+      var c = acharCampo(idCampo);
       return c ? (c.emUso || 0) : 0;
     }
     var n = 0;
@@ -85,12 +82,24 @@
     var base = nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
       .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'campo';
     var id = base, n = 2;
-    while (campos.some(function (c) { return c.id === id; })) { id = base + '-' + (n++); }
+    while (campos.some(function (c) { return String(c.id) === id; })) { id = base + '-' + (n++); }
     return id;
   }
 
+  function nomeRecorrencia(id) {
+    var r = GI.RECORRENCIAS.filter(function (x) { return x.id === (id || 'unico'); })[0];
+    return r ? r.nome : 'único';
+  }
+
+  /* ---------------------------------------------------------------- tabela */
+
   function desenhar() {
     var corpo = el('gi-corpo');
+    var ativos = campos.filter(function (c) { return c.ativo !== false; }).length;
+    el('gi-contagem').textContent = campos.length
+      ? campos.length + (campos.length > 1 ? ' campos' : ' campo') + ' · ' + ativos + ' ativo' + (ativos === 1 ? '' : 's')
+      : '';
+
     if (!campos.length) {
       corpo.innerHTML = '<tr><td colspan="6"><div class="gi-vazio">' +
         'Nenhum campo ainda.<br><span class="gi-pequeno">Comece por um: IPTU, taxa de lixo, condomínio, observação da administração.</span>' +
@@ -102,24 +111,29 @@
     corpo.innerHTML = campos.map(function (c) {
       var n = usos(c.id);
       var inativo = c.ativo === false;
-      return '<tr' + (inativo ? ' style="opacity:.55"' : '') + '>' +
+      var id = GI.escapar(String(c.id));
+      return '<tr>' +
         '<td><strong>' + GI.escapar(c.nome) + '</strong>' +
           (c.tipo === 'selecao' ? '<div class="gi-ajuda">' + GI.escapar((c.opcoes || []).join(' · ')) + '</div>' : '') +
         '</td>' +
         '<td>' + GI.escapar(GI.nomeTipo(c.tipo)) + '</td>' +
         '<td>' + (c.tipo === 'valor' ? GI.escapar(nomeRecorrencia(c.recorrenciaPadrao)) : '<span class="gi-mudo">—</span>') + '</td>' +
         '<td>' + (n ? '<span class="gi-chip">' + n + ' imóve' + (n > 1 ? 'is' : 'l') + '</span>' : '<span class="gi-mudo gi-pequeno">nenhum</span>') + '</td>' +
-        '<td>' + (inativo ? '<span class="gi-mudo">inativo</span>' : 'ativo') + '</td>' +
-        '<td class="gi-direita gi-nowrap">' +
-          '<button type="button" class="btn btn-slim" data-renomear="' + c.id + '">renomear</button> ' +
-          '<button type="button" class="btn btn-slim" data-alternar="' + c.id + '">' + (inativo ? 'reativar' : 'desativar') + '</button> ' +
-          '<button type="button" class="btn btn-slim btn-perigo" data-apagar="' + c.id + '">apagar</button>' +
+        '<td><span class="gi-estado ' + (inativo ? 'gi-estado-off' : 'gi-estado-ok') + '">' +
+            '<span class="gi-ponto ' + (inativo ? 'gi-ponto-off' : 'gi-ponto-ok') + '"></span>' +
+            (inativo ? 'Inativo' : 'Ativo') + '</span></td>' +
+        '<td>' +
+          '<div class="gi-acoes">' +
+            '<button type="button" class="btn btn-slim btn-icone" title="Editar" aria-label="Editar" ' +
+              'data-editar="' + id + '">' + I.editar + '</button>' +
+            '<button type="button" class="btn btn-slim btn-icone btn-perigo" title="Apagar" aria-label="Apagar" ' +
+              'data-apagar="' + id + '">' + I.apagar + '</button>' +
+          '</div>' +
         '</td>' +
       '</tr>';
     }).join('');
 
-    ligar('data-renomear', renomear);
-    ligar('data-alternar', alternar);
+    ligar('data-editar', editar);
     ligar('data-apagar', apagar);
     GI.ajustarAltura();
   }
@@ -130,13 +144,8 @@
     });
   }
 
-  function nomeRecorrencia(id) {
-    var r = GI.RECORRENCIAS.filter(function (x) { return x.id === (id || 'unico'); })[0];
-    return r ? r.nome : 'único';
-  }
-
   function persistir() {
-    return GI.salvarCampos(campos).then(desenhar).catch(GI.erroFatal);
+    return GI.salvarCampos(campos).then(desenhar);
   }
 
   /* No modo portal cada campo é uma linha no banco: criar, alterar e apagar
@@ -146,71 +155,160 @@
     return promessa.then(function (lista) {
       campos = lista;
       desenhar();
-    }).catch(function (e) {
-      GI.aviso(e && e.message ? e.message : String(e), 'error');
-      GI.erroFatal(e);
     });
   }
 
+  /* ------------------------------------------------------ criar (num modal) */
+
+  function abrirNovo() {
+    var corpo =
+      '<div class="gi-grade-modal">' +
+        '<div class="gi-campo-caixa" style="grid-column:1/-1"><label for="m-nome">Nome</label>' +
+          '<input id="m-nome" type="text" placeholder="ex.: IPTU, Taxa de lixo, Aceita pet"></div>' +
+        '<div class="gi-campo-caixa"><label for="m-tipo">Tipo</label><select id="m-tipo"></select></div>' +
+        '<div class="gi-campo-caixa" id="m-caixa-rec"><label for="m-rec">Recorrência padrão</label>' +
+          '<select id="m-rec"></select></div>' +
+        '<div class="gi-campo-caixa" id="m-caixa-opc" style="grid-column:1/-1">' +
+          '<label for="m-opcoes">Opções (uma por vírgula)</label>' +
+          '<input id="m-opcoes" type="text" placeholder="Sim até 10kg, Sim, Não"></div>' +
+      '</div>' +
+      '<p class="gi-ajuda" id="m-ajuda" style="margin:10px 2px 0"></p>';
+
+    GI.modal({
+      titulo: 'Novo campo', corpo: corpo, rotuloOk: 'Adicionar', largura: 640,
+      aoAbrir: function () {
+        el('m-tipo').innerHTML = GI.TIPOS.map(function (t) {
+          return '<option value="' + t.id + '">' + t.nome + '</option>';
+        }).join('');
+        el('m-rec').innerHTML = GI.RECORRENCIAS.map(function (r) {
+          return '<option value="' + r.id + '"' + (r.id === 'mes' ? ' selected' : '') + '>' + r.nome + '</option>';
+        }).join('');
+        el('m-tipo').addEventListener('change', function () { formaDoFormulario('m'); });
+        formaDoFormulario('m');
+      },
+      aoConfirmar: criar
+    }).catch(GI.erroFatal);
+  }
+
+  /* `p` é o prefixo dos ids — 'm' no modal de criar, 'e' no de editar. */
+  function formaDoFormulario(p) {
+    var tipo = el(p + '-tipo').value;
+    el(p + '-caixa-opc').style.display = (tipo === 'selecao') ? 'flex' : 'none';
+    el(p + '-caixa-rec').style.display = (tipo === 'valor') ? 'flex' : 'none';
+    var t = GI.TIPOS.filter(function (x) { return x.id === tipo; })[0];
+    el(p + '-ajuda').textContent = t && t.ajuda ? t.ajuda : '';
+    GI.ajustarAltura();
+  }
+
+  /* Recusa devolve erro: o modal mostra o texto e mantém o que foi digitado. */
   function criar() {
-    var nome = el('n-nome').value.trim();
-    var tipo = el('n-tipo').value;
-    if (!nome) { GI.aviso('Dê um nome ao campo.', 'error'); return; }
+    var nome = String(el('m-nome').value || '').trim();
+    var tipo = el('m-tipo').value;
+
+    if (!nome) throw new Error('Dê um nome ao campo.');
     if (campos.some(function (c) { return c.nome.toLowerCase() === nome.toLowerCase(); })) {
-      GI.aviso('Já existe um campo com esse nome — dois rótulos parecidos viram duas taxas diferentes.', 'error');
-      return;
+      throw new Error('Já existe um campo com esse nome — dois rótulos parecidos viram duas taxas diferentes.');
     }
 
     var campo = { id: novoId(nome), nome: nome, tipo: tipo, ativo: true };
 
     if (tipo === 'selecao') {
-      var opcoes = el('n-opcoes').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-      if (!opcoes.length) { GI.aviso('Campo de seleção sem opção seria impossível de preencher.', 'error'); return; }
+      var opcoes = String(el('m-opcoes').value || '').split(',')
+        .map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!opcoes.length) throw new Error('Campo de seleção sem opção seria impossível de preencher.');
       campo.opcoes = opcoes;
     }
-    if (tipo === 'valor') campo.recorrenciaPadrao = el('n-recorrencia').value;
+    if (tipo === 'valor') campo.recorrenciaPadrao = el('m-rec').value;
 
-    el('n-nome').value = ''; el('n-opcoes').value = '';
+    function avisar() { GI.aviso('Campo "' + nome + '" criado.', 'success'); return true; }
 
-    if (GI.modo === 'portal') {
-      aplicar(GI.campoCriar(campo).then(function (lista) {
-        GI.aviso('Campo "' + nome + '" criado.', 'success');
-        return lista;
-      }));
-      return;
-    }
+    if (GI.modo === 'portal') return aplicar(GI.campoCriar(campo)).then(avisar);
     campos.push(campo);
-    persistir().then(function () { GI.aviso('Campo "' + nome + '" criado.', 'success'); });
+    return persistir().then(avisar);
   }
 
-  function renomear(id) {
-    var campo = campos.filter(function (c) { return c.id === id; })[0];
+  /* ------------------------------------------------------------ as funções */
+
+  /* Uma tela de edição só, em vez dos antigos "renomear" e "desativar"
+     separados: nome, tipo, recorrência, opções e o estado do campo no mesmo
+     lugar — é onde a pessoa já está olhando quando quer mexer no campo. */
+  function editar(id) {
+    var campo = acharCampo(id);
     if (!campo) return;
-    var atual = campo.nome;
-    GI.pedirTexto({
-      titulo: 'Renomear campo', rotulo: 'Nome do campo', valor: atual, rotuloOk: 'Atualizar'
-    }).then(function (novo) {
-      if (!novo || novo === atual) return null;
-      campo.nome = novo;
-      if (GI.modo === 'portal') return aplicar(GI.campoAtualizar(campo));
-      return persistir();
+    var n = usos(id);
+
+    var corpo =
+      '<div class="gi-grade-modal">' +
+        '<div class="gi-campo-caixa" style="grid-column:1/-1"><label for="e-nome">Nome</label>' +
+          '<input id="e-nome" type="text" value="' + GI.escapar(campo.nome) + '"></div>' +
+        '<div class="gi-campo-caixa"><label for="e-tipo">Tipo</label><select id="e-tipo"></select></div>' +
+        '<div class="gi-campo-caixa"><label for="e-estado">Estado</label><select id="e-estado">' +
+          '<option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></div>' +
+        '<div class="gi-campo-caixa" id="e-caixa-rec"><label for="e-rec">Recorrência padrão</label>' +
+          '<select id="e-rec"></select></div>' +
+        '<div class="gi-campo-caixa" id="e-caixa-opc" style="grid-column:1/-1">' +
+          '<label for="e-opcoes">Opções (uma por vírgula)</label>' +
+          '<input id="e-opcoes" type="text" value="' + GI.escapar((campo.opcoes || []).join(', ')) + '"></div>' +
+      '</div>' +
+      '<p class="gi-ajuda" id="e-ajuda" style="margin:10px 2px 0"></p>' +
+      (n ? '<p class="gi-ajuda" style="margin:6px 2px 0">Este campo está preenchido em ' + n +
+           ' imóve' + (n > 1 ? 'is' : 'l') + '. <strong>Inativo</strong> some da tela de lançamento e das ' +
+           'respostas da IA, mas não apaga nada — dá para reativar quando quiser.</p>' : '');
+
+    GI.modal({
+      titulo: 'Editar campo', corpo: corpo, rotuloOk: 'Atualizar', largura: 640,
+      aoAbrir: function () {
+        el('e-tipo').innerHTML = GI.TIPOS.map(function (t) {
+          return '<option value="' + t.id + '"' + (t.id === campo.tipo ? ' selected' : '') + '>' + t.nome + '</option>';
+        }).join('');
+        el('e-rec').innerHTML = GI.RECORRENCIAS.map(function (r) {
+          var sel = (campo.recorrenciaPadrao || 'mes') === r.id ? ' selected' : '';
+          return '<option value="' + r.id + '"' + sel + '>' + r.nome + '</option>';
+        }).join('');
+        el('e-estado').value = (campo.ativo === false) ? 'inativo' : 'ativo';
+        el('e-tipo').addEventListener('change', function () { formaDoFormulario('e'); });
+        formaDoFormulario('e');
+      },
+      aoConfirmar: function () { return salvarEdicao(campo); }
     }).catch(GI.erroFatal);
   }
 
-  function alternar(id) {
-    var campo = campos.filter(function (c) { return c.id === id; })[0];
-    if (!campo) return;
-    campo.ativo = (campo.ativo === false);
-    if (GI.modo === 'portal') { aplicar(GI.campoAtualizar(campo)); return; }
-    persistir();
+  function salvarEdicao(campo) {
+    var nome = String(el('e-nome').value || '').trim();
+    var tipo = el('e-tipo').value;
+
+    if (!nome) throw new Error('Dê um nome ao campo.');
+    if (campos.some(function (c) {
+      return String(c.id) !== String(campo.id) && c.nome.toLowerCase() === nome.toLowerCase();
+    })) {
+      throw new Error('Já existe outro campo com esse nome.');
+    }
+
+    var opcoes = campo.opcoes || [];
+    if (tipo === 'selecao') {
+      opcoes = String(el('e-opcoes').value || '').split(',')
+        .map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!opcoes.length) throw new Error('Campo de seleção sem opção seria impossível de preencher.');
+    }
+
+    campo.nome = nome;
+    campo.tipo = tipo;
+    campo.opcoes = opcoes;
+    campo.ativo = el('e-estado').value !== 'inativo';
+    if (tipo === 'valor') campo.recorrenciaPadrao = el('e-rec').value;
+
+    function avisar() { GI.aviso('Campo "' + nome + '" atualizado.', 'success'); return true; }
+
+    if (GI.modo === 'portal') return aplicar(GI.campoAtualizar(campo)).then(avisar);
+    return persistir().then(avisar);
   }
 
   /* Apagar existe para campo em uso também. Antes o botão sumia quando havia
      lançamento — e quem queria apagar ficava sem saída nenhuma na tela, sem
-     nem saber por quê. O aviso agora diz o tamanho do estrago e oferece o
-     caminho mais brando (desativar), mas a decisão é de quem está olhando. */
+     nem saber por quê. O aviso diz o tamanho do estrago e oferece o caminho
+     mais brando (desativar), mas a decisão é de quem está olhando. */
   function apagar(id) {
-    var campo = campos.filter(function (c) { return c.id === id; })[0];
+    var campo = acharCampo(id);
     if (!campo) return;
     var n = usos(id);
 
@@ -225,36 +323,26 @@
       rotuloOk: 'Apagar', perigo: true
     }).then(function (ok) {
       if (!ok) return null;
-      if (GI.modo === 'portal') return aplicar(GI.campoApagar(id));
-      campos = campos.filter(function (c) { return c.id !== id; });
-      return persistir();
-    }).catch(GI.erroFatal);
+      var p;
+      if (GI.modo === 'portal') {
+        p = aplicar(GI.campoApagar(campo.id));
+      } else {
+        campos = campos.filter(function (c) { return String(c.id) !== String(id); });
+        p = persistir();
+      }
+      return p.then(function () { GI.aviso('Campo "' + campo.nome + '" apagado.', 'success'); });
+    }).catch(function (e) {
+      GI.aviso(e && e.message ? e.message : String(e), 'error');
+      GI.erroFatal(e);
+    });
   }
 
-  function atualizarFormaDoFormulario() {
-    var tipo = el('n-tipo').value;
-    el('n-caixa-opcoes').style.display = (tipo === 'selecao') ? 'flex' : 'none';
-    el('n-caixa-recorrencia').style.display = (tipo === 'valor') ? 'flex' : 'none';
-    var t = GI.TIPOS.filter(function (x) { return x.id === tipo; })[0];
-    el('n-ajuda').textContent = t && t.ajuda ? t.ajuda : '';
-    GI.ajustarAltura();
-  }
+  /* ------------------------------------------------------------------ ligar */
 
   GI.pronto(function () {
     el('gi-nav').innerHTML = GI.cabecalho('gi-campos');
     GI.ligarNavegacao();
-
-    el('n-tipo').innerHTML = GI.TIPOS.map(function (t) {
-      return '<option value="' + t.id + '">' + t.nome + '</option>';
-    }).join('');
-    el('n-recorrencia').innerHTML = GI.RECORRENCIAS.map(function (r) {
-      return '<option value="' + r.id + '"' + (r.id === 'mes' ? ' selected' : '') + '>' + r.nome + '</option>';
-    }).join('');
-
-    el('n-tipo').addEventListener('change', atualizarFormaDoFormulario);
-    el('b-criar').addEventListener('click', criar);
-    el('n-nome').addEventListener('keydown', function (e) { if (e.key === 'Enter') criar(); });
-    atualizarFormaDoFormulario();
+    el('b-novo').addEventListener('click', abrirNovo);
 
     return Promise.all([GI.campos(), GI.valores()]).then(function (r) {
       campos = r[0]; valores = r[1];

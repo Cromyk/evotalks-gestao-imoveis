@@ -14,8 +14,41 @@
     var v = ctx && ctx.config ? ctx.config[chave] : undefined;
     return (v === undefined || v === null || v === '') ? padrao : v;
   };
+  /* Quem está gravando. O contexto nem sempre traz `user.name` — e quando não
+     traz, o que ia para o histórico era o ID, que não diz nada a ninguém. Por
+     isso o nome é resolvido na abertura da tela, contra a lista de usuários da
+     instância, e só cai no ID se essa consulta não responder. */
+  var nomeResolvido = '';
+
   GI.usuario = function () {
+    if (nomeResolvido) return nomeResolvido;
     return (ctx && ctx.user) ? (ctx.user.name || ctx.user.id) : 'desconhecido';
+  };
+
+  var cacheUsuarios = null;
+
+  /** Mapa id → nome dos usuários da instância. Falha vira mapa vazio. */
+  GI.usuarios = function () {
+    if (cacheUsuarios) return Promise.resolve(cacheUsuarios);
+    if (!global.omni || !omni.data || !omni.data.request) return Promise.resolve({});
+    return Promise.resolve(omni.data.request('users?limit=500', 'GET'))
+      .then(function (r) {
+        var mapa = {};
+        GI.lista(r).forEach(function (u) {
+          var nome = u && (u.name || u.username || u.login || u.email);
+          if (u && u.id !== undefined && nome) mapa[String(u.id)] = String(nome);
+        });
+        cacheUsuarios = mapa;
+        return mapa;
+      })
+      .catch(function () { cacheUsuarios = {}; return cacheUsuarios; });
+  };
+
+  /** Troca o ID pelo nome quando der; devolve o valor original quando não. */
+  GI.nomeDeUsuario = function (mapa, valor) {
+    var v = String(valor === null || valor === undefined ? '' : valor);
+    if (!v) return '';
+    return (mapa && mapa[v]) ? mapa[v] : v;
   };
 
   GI.pronto = function (fn) {
@@ -31,6 +64,15 @@
       ctx = c || null;
       aplicarTema(ctx);
       Promise.resolve()
+        .then(function () {
+          // O nome de quem grava é decidido ANTES de qualquer escrita — senão
+          // o primeiro registro do dia sai com ID e o resto com nome.
+          if (ctx && ctx.user && ctx.user.name) { nomeResolvido = String(ctx.user.name); return null; }
+          if (!ctx || !ctx.user || ctx.user.id === undefined) return null;
+          return GI.usuarios().then(function (mapa) {
+            nomeResolvido = mapa[String(ctx.user.id)] || '';
+          });
+        })
         .then(function () { return GI.definirModo(); })
         .then(function () { GI.mostrarModo(); })
         .then(function () { return fn(ctx); })

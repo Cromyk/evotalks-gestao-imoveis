@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<link rel="stylesheet" href="estilo.css?v=0.13.0">
+<link rel="stylesheet" href="estilo.css?v=0.14.0">
 
 <div class="gi-topo">
   <div>
@@ -74,12 +74,13 @@
   no modo local ficam os <strong>500 mais recentes</strong>, e o mais antigo sai quando o 501 entra.
 </p>
 
-<script src="comum.js?v=0.13.0"></script>
+<script src="comum.js?v=0.14.0"></script>
 <script>
 (function () {
   'use strict';
 
   var eventos = [];
+  var nomes = {};   // id -> nome, para o histórico não mostrar número de usuário
   var el = function (id) { return document.getElementById(id); };
 
   function filtrados() {
@@ -94,7 +95,7 @@
       if (imovel && String(e.codigo).toLowerCase().indexOf(imovel) === -1 &&
           GI.codigoCurto(e.codigo).toLowerCase().indexOf(imovel) === -1) return false;
       if (campo && e.campo !== campo) return false;
-      if (quem && e.quem !== quem) return false;
+      if (quem && GI.nomeDeUsuario(nomes, e.quem) !== quem) return false;
       if (acao && e.acao !== acao) return false;
       var q = new Date(e.quando);
       if (de && q < de) return false;
@@ -129,7 +130,7 @@
         '<td style="color:' + cor + '">' + GI.escapar(e.acao) + '</td>' +
         '<td class="gi-pequeno gi-mudo">' + (e.de ? GI.escapar(e.de) : '—') + '</td>' +
         '<td class="gi-pequeno">' + (e.para ? GI.escapar(e.para) : '—') + '</td>' +
-        '<td class="gi-pequeno">' + GI.escapar(e.quem) + '</td>' +
+        '<td class="gi-pequeno">' + GI.escapar(GI.nomeDeUsuario(nomes, e.quem)) + '</td>' +
       '</tr>';
     }).join('');
     GI.ajustarAltura();
@@ -139,7 +140,8 @@
     var campos = [], quem = [];
     eventos.forEach(function (e) {
       if (campos.indexOf(e.campo) === -1) campos.push(e.campo);
-      if (quem.indexOf(e.quem) === -1) quem.push(e.quem);
+      var n = GI.nomeDeUsuario(nomes, e.quem);
+      if (quem.indexOf(n) === -1) quem.push(n);
     });
     el('f-campo').innerHTML = '<option value="">todos</option>' + campos.sort().map(function (c) {
       return '<option>' + GI.escapar(c) + '</option>';
@@ -162,21 +164,24 @@
       desenhar();
     });
     el('b-zerar').addEventListener('click', function () {
-      Promise.resolve(omni.ui.confirm({
-        title: 'Apagar histórico',
-        message: 'Apagar os ' + eventos.length + ' eventos registrados? Os valores dos imóveis não são afetados.'
-      })).then(function (ok) {
-        if (ok === false) return;
+      GI.confirmar({
+        titulo: 'Apagar histórico',
+        mensagem: 'Apagar os ' + eventos.length + ' eventos registrados?',
+        detalhe: 'Os valores lançados nos imóveis não são afetados — some só o registro de quem mudou o quê.',
+        rotuloOk: 'Apagar', perigo: true
+      }).then(function (ok) {
+        if (!ok) return null;
         return GI.limpar('historico').then(function () {
           eventos = []; preencherSeletores(); desenhar();
           GI.aviso('Histórico apagado.', 'success');
         });
-      }).catch(function () {});
+      }).catch(GI.erroFatal);
     });
 
     if (GI.modo === 'portal') { el('b-zerar').style.display = 'none'; }
-    return GI.historico().then(function (lista) {
-      eventos = lista;
+    return Promise.all([GI.historico(), GI.usuarios()]).then(function (r) {
+      eventos = r[0];
+      nomes = r[1] || {};
       preencherSeletores();
       desenhar();
     });

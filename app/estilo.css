@@ -130,6 +130,11 @@ tbody tr:hover { background: var(--gi-acao-suave); }
 }
 .gi-estado-pendente { background: rgba(240, 180, 41, .16); color: #8a6100; }
 .gi-estado-ok       { background: rgba(34, 181, 115, .16); color: #10714a; }
+.gi-estado-off      { background: var(--gi-acao-suave); color: var(--gi-mudo); }
+.gi-ponto-off       { background: var(--gi-mudo); opacity: .5; }
+
+/* Barra de ação acima da tabela: contagem à esquerda, botão à direita. */
+.gi-barra-acoes { align-items: center; justify-content: space-between; }
 
 .gi-acoes { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 
@@ -219,6 +224,10 @@ body.gi-com-modal > *:not(.gi-modal-fundo) { display: none !important; }
   min-width: 28px; height: 28px; padding: 0 8px; border-radius: 999px;
   background: var(--gi-acao); color: var(--gi-acao-texto); font-size: 12px; font-weight: 500;
 }
+
+/* Formulário dentro do modal: duas colunas quando cabe. */
+.gi-grade-modal { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 620px) { .gi-grade-modal { grid-template-columns: 1fr; } }
 
 /* Cabeçalho do imóvel dentro do modal de edição. */
 .gi-modal-imovel {
