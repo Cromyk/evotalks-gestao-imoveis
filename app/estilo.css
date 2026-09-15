@@ -140,14 +140,24 @@ tbody tr:hover { background: var(--gi-acao-suave); }
 
 /* ------------------------------------------------------------------- modal */
 
-/* Enquanto o modal está aberto o resto da tela sai do caminho — ver a nota em
-   comum.js sobre por que não é um overlay flutuante. */
-body.gi-com-modal { padding: 0; background: rgba(20, 20, 20, .5); }
-body.gi-com-modal > *:not(.gi-modal-fundo) { display: none !important; }
+/* O modal é popup de verdade: a tela continua atrás, desfocada e fora de
+   alcance. A caixa é posicionada por script (ver `posicionar` em comum.js),
+   porque dentro do contêiner da extensão `position: fixed` gruda no topo do
+   documento — e não no pedaço que a pessoa está enxergando. */
+body { position: relative; }
+body.gi-com-modal { overflow: hidden; }
+body.gi-com-modal > *:not(.gi-modal-fundo) {
+  filter: blur(3px); pointer-events: none; user-select: none;
+}
 
-.gi-modal-fundo { padding: 26px 16px 40px; min-height: 100vh; }
+.gi-modal-fundo {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(20, 20, 20, .28); z-index: 40;
+}
 .gi-modal {
-  background: var(--gi-surface); border-radius: 10px; max-width: 900px; margin: 0 auto;
+  position: absolute; top: 24px; left: 50%; transform: translateX(-50%);
+  width: calc(100% - 32px); max-width: 900px;
+  background: var(--gi-surface); border-radius: 10px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, .28); overflow: hidden;
 }
 .gi-modal-topo {

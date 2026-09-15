@@ -679,13 +679,44 @@
      código nem rodava — o clique em "apagar" simplesmente não fazia nada. Daí
      o diálogo ser nosso, no formato dos modais da plataforma.
 
-     Não é overlay flutuante de propósito. A altura do contêiner acompanha o
-     conteúdo (`omni.ui.resize`), então um `position: fixed` apareceria preso ao
-     topo do documento — fora da vista de quem rolou a lista. O modal esconde o
-     conteúdo da tela enquanto está aberto: o efeito é o mesmo e ele sempre
-     nasce onde a pessoa está olhando. */
+     Ele é popup: a tela continua atrás, desfocada. O que não dá para usar é
+     `position: fixed` — a altura do contêiner acompanha o conteúdo
+     (`omni.ui.resize`) e quem rola é a página da instância, que é de outra
+     origem: o "viewport" daqui de dentro é o documento inteiro, então a caixa
+     ficaria colada no topo, longe de quem rolou a lista.
+
+     Daí `posicionar`: um IntersectionObserver com `root: null` enxerga a
+     janela de verdade, mesmo através do iframe, e diz qual faixa do documento
+     está aparecendo. A caixa é centrada NESSA faixa. Sem o observador (ou se
+     ele vier zerado), fica no topo — que é o pior caso, não uma quebra. */
 
   var modaisAbertos = 0;
+
+  function posicionar(fundo, caixa) {
+    if (!global.IntersectionObserver) return null;
+
+    var limites = [];
+    for (var i = 0; i <= 50; i++) limites.push(i / 50);
+
+    var obs = new IntersectionObserver(function (entradas) {
+      var e = entradas[entradas.length - 1];
+      if (!e || !e.intersectionRect || !e.intersectionRect.height) return;
+      var visTopo = e.intersectionRect.top - e.boundingClientRect.top;  // px do documento
+      var visAltura = e.intersectionRect.height;
+      var sobra = visAltura - caixa.offsetHeight;
+      var topo = visTopo + (sobra > 0 ? sobra / 2 : 16);
+
+      /* Teto: a caixa não pode empurrar o fim do documento, senão o contêiner
+         cresce, a faixa visível muda, e ele cresce de novo — oscilação. */
+      var maxTopo = fundo.offsetHeight - caixa.offsetHeight - 8;
+      if (maxTopo > 8) topo = Math.min(topo, maxTopo);
+
+      caixa.style.top = Math.max(8, topo) + 'px';
+    }, { threshold: limites });
+
+    obs.observe(fundo);
+    return obs;
+  }
 
   GI.modal = function (op) {
     op = op || {};
@@ -716,8 +747,11 @@
       var recado = fundo.querySelector('.gi-modal-recado');
       var botaoOk = fundo.querySelector('[data-ok]');
 
+      var observador = null;
+
       function fechar(valor) {
         document.removeEventListener('keydown', naTecla);
+        if (observador) observador.disconnect();
         if (fundo.parentNode) fundo.parentNode.removeChild(fundo);
         modaisAbertos = Math.max(0, modaisAbertos - 1);
         if (!modaisAbertos) document.body.classList.remove('gi-com-modal');
@@ -749,11 +783,15 @@
       document.body.appendChild(fundo);
       document.body.classList.add('gi-com-modal');
       modaisAbertos++;
-      GI.ajustarAltura();
 
       if (op.aoAbrir) op.aoAbrir(caixa);
+
+      /* Posicionar DEPOIS do conteúdo: a altura da caixa é o que centraliza. */
+      observador = posicionar(fundo, fundo.querySelector('.gi-modal'));
+      GI.ajustarAltura();
+
       var primeiro = caixa.querySelector('input, select, textarea');
-      if (primeiro) { try { primeiro.focus(); } catch (e) { /* sem foco, tudo bem */ } }
+      if (primeiro) { try { primeiro.focus({ preventScroll: true }); } catch (e) { /* sem foco, tudo bem */ } }
     });
   };
 
